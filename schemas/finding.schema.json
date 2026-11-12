@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Visual OPSEC review candidate",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "category", "source", "bbox", "confidence", "review_status"],
+  "properties": {
+    "id": {"type": "string", "minLength": 1},
+    "category": {"enum": ["text", "screen", "badge", "label", "reflection", "other"]},
+    "source": {"enum": ["ocr", "vlm", "human"]},
+    "bbox": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": {"type": "number", "minimum": 0, "maximum": 1},
+      "description": "x, y, width, height in normalized oriented image; validate x+w/y+h <= 1 in code"
+    },
+    "confidence": {"type": ["number", "null"], "minimum": 0, "maximum": 1, "description": "Detector score, not calibrated privacy risk; null if unavailable"},
+    "review_status": {"enum": ["pending", "accepted", "rejected"]}
+  }
+}

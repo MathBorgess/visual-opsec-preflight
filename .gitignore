@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+.env
+.env.*
+!.env.example
+inputs/
+outputs/
+reports/
+private/
+*.jpg
+*.jpeg
+*.png
+*.heic
+*.webp
+.DS_Store
