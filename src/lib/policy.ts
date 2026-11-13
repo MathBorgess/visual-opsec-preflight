@@ -2,6 +2,7 @@ import {
   AppError,
   isIdentitySeed,
   type AnalysisData,
+  type DiscoveryData,
   type FindingData,
   type ResearchData,
   type SeedData,
@@ -291,16 +292,18 @@ export function validateResearch(
   }
   // Discoveries survive only with an approved identity, existing sources and
   // values free of contacts, documents or case numbers.
-  const seen = new Set<string>();
-  result.discovered = identityApproved
-    ? (result.discovered ?? []).filter((d) => {
-        const key = d.facet + ':' + d.value.trim().toLowerCase();
-        if (seen.has(key) || isSensitive(d.value) || d.sourceIds.some((id) => !sourceIds.has(id)))
-          return false;
-        seen.add(key);
-        return true;
-      })
-    : [];
+  const discoveries = new Map<string, DiscoveryData>();
+  if (identityApproved)
+    for (const d of result.discovered ?? []) {
+      if (isSensitive(d.value) || d.sourceIds.some((id) => !sourceIds.has(id))) continue;
+      const key = d.match + ':' + d.facet + ':' + d.value.trim().toLowerCase();
+      const prior = discoveries.get(key);
+      discoveries.set(key, {
+        ...(prior ?? d),
+        sourceIds: [...new Set([...(prior?.sourceIds ?? []), ...d.sourceIds])],
+      });
+    }
+  result.discovered = [...discoveries.values()];
   validateFindings(result.findings, analysis, result.sources);
   return result;
 }
