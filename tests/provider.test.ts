@@ -139,6 +139,16 @@ describe('adaptador Agents API — SDK real com HTTP controlado', () => {
     expect(calls[0].body.agent.multi_agent).toEqual({ enabled: false });
     expect(calls[0].body.input[0].content[1].type).toBe('input_image');
     expect(calls[0].body.agent.text.format.schema.properties).toHaveProperty('synthesis');
+    const schema = calls[0].body.agent.text.format.schema;
+    expect(JSON.stringify(schema)).not.toContain('prefixItems');
+    const bbox = schema.properties.analysis.anyOf[0].properties.regions.items.properties.bbox;
+    expect(bbox).toMatchObject({
+      type: 'array',
+      items: { type: 'number' },
+      minItems: 4,
+      maxItems: 4,
+    });
+    expect(Array.isArray(bbox.items)).toBe(false);
     expect(calls[1].body.agent.tools).toEqual([
       { type: 'web_search', mode: 'live', allowed_domains: ['example.org'] },
     ]);
