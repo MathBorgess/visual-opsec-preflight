@@ -29,6 +29,8 @@ A chave `OPENAI_API_KEY` será uma variável **Secret** do projeto Vercel, acess
 - [Arquitetura e implantação proposta](docs/architecture.md)
 - [Requisitos funcionais e critérios de aceite](docs/requirements.md)
 - [Agente, exploração e pesquisa web](docs/agent-research.md)
+- [Loop de exploração e critérios de parada](docs/exploration-loop.md)
+- [Catálogo inicial de fontes](docs/source-catalog.md)
 - [OpenAI e armazenamento da secret](docs/openai-integration.md)
 - [Contrato do documento de exposição virtual](docs/exposure-report.md)
 - [Exemplo sintético do documento](docs/examples/exposure-report.synthetic.md)

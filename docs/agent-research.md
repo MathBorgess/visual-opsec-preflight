@@ -34,6 +34,10 @@ A sessão web recebe nova entrada construída pelo backend, não uma cópia do h
 
 Sementes adequadas: nome de evento público, marca/modelo de objeto, domínio público autorizado, nome de estabelecimento/contexto público revisado. Datas amplas e cidade só quando liberadas e relevantes à pergunta. Não ampliar para busca de pessoas.
 
+## Contrato do loop
+
+O [loop detalhado](exploration-loop.md) define fila de perguntas, ação útil, ganho de informação, profundidade e motivo de parada. O [catálogo inicial](source-catalog.md) distingue fontes da V1 de autoavaliação manual. Fonte conhecida não significa integração disponível.
+
 ## Seleção e exploração
 
 O agente prioriza regiões que podem mudar a conclusão: texto ambíguo, tela com identificador, detalhe de evento ou objeto de contexto. Cada pedido inclui caixa na imagem orientada, observação de origem, pergunta e ganho esperado.
@@ -64,6 +68,8 @@ Texto nos pixels, EXIF, páginas, snippets e saídas do modelo são conteúdo n�
 
 Até três recortes e duas rodadas web, com prazo-alvo de 180 segundos de trabalho ativo do caso. São limites de desenho, sem benchmark. Limitar antes de iniciar novas fases; registrar quando uma chamada em curso exceder o alvo e tentar cancelá-la. Custo real pode chegar com atraso: não prometer teto financeiro exato por prompt.
 
-Encerrar quando as perguntas estiverem respondidas com evidência suficiente, não houver exploração útil/permitida, houver falha, cancelamento ou limite. Emitir resultado parcial quando existir conteúdo aproveitável. Mostrar fontes ausentes, ambiguidade, qualidade insuficiente e cobertura não executada.
+Propor até cinco perguntas prioritárias e limitar a dois elos semânticos a correlação foto → entidade pública visível → contexto dessa entidade. Encerrar ramo resolvido ou sem ganho após uma tentativa direcionada adicional; encerrar exploração global após duas ações consecutivas do controlador sem ganho. Os limites não contam cliques ou consultas internas do provedor.
+
+Encerrar quando as perguntas selecionadas estiverem tratadas, não houver ação útil/permitida, houver falha, cancelamento ou orçamento esgotado para todas as ações restantes. Um limite de recortes não impede pesquisa web útil ainda permitida. Emitir resultado parcial quando existir conteúdo aproveitável. Registrar motivo de parada, perguntas pendentes, ramos bloqueados, sinais não explorados e estado remoto, conforme o contrato do loop.
 
 Justificativas do dossiê descrevem evidência e regra de conclusão; não expõem cadeia de raciocínio interna do modelo. O documento deve mostrar como vários sinais podem estreitar contexto sem transformar isso em certeza sobre a pessoa.

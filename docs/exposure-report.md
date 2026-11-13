@@ -19,7 +19,7 @@ O documento é um material educativo de exposição, não prova pericial, confir
 | 5. O que a web acrescentou | Sementes liberadas, perguntas, rodadas, fontes, trechos disponíveis, datas e estado de recuperação |
 | 6. Achados e correlações | Cadeia de evidências, inferência, alternativas, estado epistemológico, prioridade e recomendação |
 | 7. Redução de exposição | Ações específicas e verificáveis que o autor pode tomar; distinguir recomendação de ação efetivamente realizada |
-| 8. Cobertura e limites | Regiões analisadas, tentativas, fontes inacessíveis, conflitos, trabalho não feito, estado da execução, uso disponível e retenção/encerramento |
+| 8. Cobertura e limites | Perguntas selecionadas, regiões/tentativas, fontes inacessíveis, conflitos, motivo de parada, pendências, estado remoto, uso disponível e retenção/encerramento |
 
 Se uma seção não tiver dados, mostrar o motivo: `not_present`, `not_supported`, `not_authorized`, `not_executed`, `failed` ou `unknown`. Se a pesquisa não foi autorizada, não preencher a seção com conhecimento genérico como se viesse de busca.
 
@@ -63,6 +63,12 @@ Toda evidência possui ID, tipo, origem/versão, descrição mínima, sensibilid
 Fonte web: semente/rodada de origem, URL canônica retornada, título, trecho efetivamente disponível, data de acesso, data de publicação se conhecida e estado `snippet_only`, `retrieved`, `unavailable` ou `fixture`. `fixture` só é admitido em exemplos/testes e deve ser rotulado sintético, nunca como consulta real.
 
 Validar referências e limites das caixas em código na implementação. `schemas/finding.schema.json` é legado de candidatos visuais e não cobre esse contrato; não usá-lo como se já validasse o dossiê completo.
+
+## Registro da parada
+
+Acrescentar `stop_reason`, `closed_questions`, `unresolved_questions`, `blocked_branches`, `unexplored_signals`, `budget_used`, `coverage` e `remote_status` ao contrato. Usar os motivos e estados do [loop](exploration-loop.md). As perguntas e sementes de origem ficam ligadas aos achados/fontes; nenhuma inferência externa perde seu vínculo à foto.
+
+Mostrar por que uma pista não foi aprofundada e que evidência faltou. Parada da exploração, síntese concluída e exclusão das sessões são resultados distintos. Um relatório pode ser parcial e conter turnos remotos ainda em cancelamento; não afirmar interrupção confirmada sem evidência do provedor.
 
 ## Formatos e compartilhamento
 

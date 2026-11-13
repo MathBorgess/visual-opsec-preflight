@@ -60,9 +60,13 @@ A chave autentica o backend na OpenAI; nunca é campo de prompt, ferramenta, ima
 
 A derivada enviada ao modelo não substitui o original como evidência. Reconhecimento visual de texto não equivale a OCR determinístico ou leitura confiável de toda região. Caixas do modelo são localizadores de revisão, não máscaras certificadas.
 
+## Controle de exploração
+
+A aplicação mantém uma fila de perguntas ligada às evidências. O [loop de exploração](exploration-loop.md) define ganho, parada por ramo/global e quais controles são do backend, do provedor ou instruções avaliadas do modelo. O [catálogo de fontes](source-catalog.md) delimita consultas automáticas e caminhos de autoavaliação manual; não adiciona APIs à V1.
+
 ## Limites iniciais
 
-Proposta configurável a validar: arquivo até **3 MiB**, corpo multipart até **3,5 MiB**, até **16 megapixels**, derivada até **2048 px no maior lado** e **700 KiB**, no máximo **3 recortes** e **2 rodadas de enriquecimento web** por caso.
+Proposta configurável a validar: arquivo até **3 MiB**, corpo multipart até **3,5 MiB**, até **16 megapixels**, derivada até **2048 px no maior lado** e **700 KiB**, no máximo **3 recortes**, **2 rodadas de enriquecimento web**, **5 perguntas prioritárias** e **2 elos semânticos de correlação** por caso. Duas ações consecutivas do controlador sem ganho encerram a exploração; limite de modalidade só bloqueia novas ações daquela modalidade.
 
 A imagem inline deve respeitar também os limites do contrato OpenAI/base64. Se não couber, reduzir com limite explícito de qualidade ou rejeitar; não criar URL pública como alternativa silenciosa. Redução pode prejudicar texto pequeno; recortes preservam mais detalhe local.
 

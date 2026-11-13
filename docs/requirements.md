@@ -26,6 +26,9 @@ Entregar um documento de exposição virtual que responda: “O que esta foto e 
 | RF-14 | Encerrar e excluir trabalho remoto | Tenta excluir as sessões vinculadas e informa sucesso, pendência ou falha; exportação é oferecida antes do encerramento |
 | RF-15 | Entregar documento parcial | Falha de busca, falta de fonte ou limite não vira “sem exposição”; entrega o que foi analisado e lista o que não foi |
 | RF-16 | Restringir execução | UI e APIs exigem acesso ao deployment; referência de caso inválida/expirada não permite consultar sessões arbitrárias |
+| RF-17 | Planejar perguntas e ações | Até cinco perguntas, cada uma ligada a evidências e critério de suficiência; proposta declara ganho esperado e dados divulgados |
+| RF-18 | Aplicar parada por ramo e global | Ramo suficiente encerra; tentativa adicional sem ganho conclui inconclusivo; duas ações consecutivas sem ganho param a exploração; limites seguem o contrato do loop |
+| RF-19 | Explicar encerramento e fontes | Dossiê registra motivo de parada, cobertura, pendências e estado remoto; fontes manuais não são apresentadas como consultadas automaticamente |
 
 ## Requisitos não funcionais
 
@@ -41,6 +44,7 @@ Entregar um documento de exposição virtual que responda: “O que esta foto e 
 | RNF-08 | Funcionar com requisições curtas | Progresso consultável sem conexão HTTP única durante toda a análise; reentrada reconcilia estado remoto |
 | RNF-09 | Ser utilizável | Upload, progresso, evidência e exportação por teclado, labels claros e texto de estado acessível |
 | RNF-10 | Manter alegações honestas | Nenhuma promessa de exaustividade, identidade, residência, segurança certificada ou precisão não medida |
+| RNF-11 | Distinguir garantias e instruções | Testes comprovam controles externos ao modelo; prompt e auditoria posterior não são anunciados como bloqueio de cada consulta interna |
 
 ## Escopo que será implementado
 
@@ -53,6 +57,10 @@ A escolha concreta de bibliotecas/versões será validada na implementação. O 
 GPT Image, GPT-Live/Realtime/voz, API de chat separada, Responses API separada, Tesseract, CLI offline, sandbox, MCP, time de agentes, crawler, busca reversa da imagem, processamento de vídeo/lotes, histórico permanente, banco/Blob, publicação de dossiê por link e sanitização/exportação de uma nova foto.
 
 Abertura multiusuário requer nova decisão de escopo: login da aplicação, autorização por caso, armazenamento durável de vínculo/estado, cotas e retenção. Proteção do deployment e cookie de uma V1 privada não satisfazem esses requisitos.
+
+## Contratos complementares
+
+[Loop e parada](exploration-loop.md), [catálogo de fontes](source-catalog.md) e [dossiê](exposure-report.md) definem as regras operacionais de RF-17–19 e RNF-11. Os limites são escolhas iniciais de produto, ainda sem calibração ou benchmark.
 
 ## Critério para iniciar implementação
 
