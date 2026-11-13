@@ -6,7 +6,7 @@ import { DemoProvider } from '@/server/demo';
 import { readManifest, signManifest } from '@/server/security';
 import { reportMarkdown } from '@/lib/report';
 import { Analysis, AppError, LIMITS, type CaseView, type Manifest } from '@/lib/contracts';
-import type { ProviderRequest, Snapshot } from '@/server/provider';
+import type { AgentsProvider, ProviderRequest, Snapshot } from '@/server/provider';
 import { ProviderError } from '@/server/provider-error';
 
 let photo: Buffer;
@@ -45,7 +45,10 @@ beforeAll(async () => {
     .jpeg()
     .toBuffer();
 });
-function harness(p = new DemoProvider(), now = () => Date.now()) {
+function harness(
+  p: AgentsProvider & { calls: ProviderRequest[] } = new DemoProvider(),
+  now = () => Date.now(),
+) {
   const api = createApi(() => p, now);
   let cookie = '';
   return {
@@ -653,6 +656,66 @@ describe('API do caso — jornada e fronteiras', () => {
       logs.mockRestore();
     }
   });
+  it.each([
+    [false, false],
+    [true, false],
+    [false, true],
+  ])(
+    'verificação de fonte usa só a segunda rodada e mantém o limite: falha=%s',
+    async (neverVerified, outOfScope) => {
+      const demo = new DemoProvider();
+      const p: AgentsProvider & { calls: ProviderRequest[] } = {
+        mode: 'openai',
+        model: 'fixture-model',
+        calls: demo.calls,
+        start: (r) => demo.start(r),
+        cancel: (id) => demo.cancel(id),
+        delete: (id) => demo.delete(id),
+        read: async (id) => {
+          const s = structuredClone(await demo.read(id));
+          if (s.initial.kind === 'research') {
+            for (const o of s.outputs)
+              if (o && typeof o === 'object' && 'sources' in o)
+                for (const source of (o as { sources: Record<string, unknown>[] }).sources) {
+                  source.url = outOfScope
+                    ? 'https://outside.net/event'
+                    : 'https://example.org/event';
+                  source.retrievalState = 'retrieved';
+                }
+            const latest = demo.calls.filter((r) => r.stage === 'research').at(-1);
+            s.visitedUrls =
+              !neverVerified && latest?.data.urlsToVerify ? ['https://example.org/event'] : [];
+          }
+          return s;
+        },
+      };
+      const h = await toReview(harness(p));
+      await h.call('advance', { action: 'search', seedIds: ['S1'], domains: ['example.org'] });
+      const first = await h.call('get');
+      if (outOfScope) {
+        expect(first.data.phase).toBe('partial');
+        expect(first.data.verificationPending).toBe(false);
+        expect(p.calls.filter((r) => r.stage === 'research')).toHaveLength(1);
+        return;
+      }
+      expect(first.data).toMatchObject({
+        phase: 'research_ready',
+        verificationPending: true,
+        budget: { rounds: 1 },
+      });
+      expect(first.data.research.sources).toEqual([]);
+      expect(first.data.report).toBeNull();
+      await h.call('advance', { action: 'research_more' });
+      expect(p.calls.at(-1)?.data.urlsToVerify).toEqual(['https://example.org/event']);
+      const second = await h.call('get');
+      expect(second.data.phase).toBe(neverVerified ? 'partial' : 'research_ready');
+      expect(second.data.budget.rounds).toBe(2);
+      if (neverVerified)
+        expect((await h.call('advance', { action: 'research_more' })).status).toBe(409);
+      else expect(second.data.research.sources[0].retrievalState).toBe('retrieved');
+      expect(p.calls.filter((r) => r.stage === 'research')).toHaveLength(2);
+    },
+  );
   it('resposta visual malformada mantém inventário e encerra com documento parcial', async () => {
     class Malformed extends DemoProvider {
       async read(id: string) {

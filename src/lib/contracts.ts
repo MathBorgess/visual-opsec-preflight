@@ -263,6 +263,7 @@ export type PendingCaseView = {
   diagnostic?: Diagnostic;
 };
 export type CaseView = {
+  verificationPending?: boolean;
   diagnostic?: Diagnostic;
   execution?: { sessionStatus: string; turnStatus: string; toolCalls: number; checkedAt: string };
   caseId: string;
