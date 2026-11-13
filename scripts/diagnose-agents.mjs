@@ -165,7 +165,8 @@ if (process.env.OPSEC_PROBE_FULL_CASE === '1') {
     if (!response.ok) process.exitCode = 1;
     if (response.ok) {
       const id = data.diagnostic?.provider?.sessionId;
-      for (let attempt = 0; id && attempt < 4; attempt++) {
+      let recovered = false;
+      for (let attempt = 0; id && attempt < 6; attempt++) {
         const saved = await client.beta.agents.sessions.items.list(id, {
           order: 'asc',
           limit: 100,
@@ -199,8 +200,15 @@ if (process.env.OPSEC_PROBE_FULL_CASE === '1') {
           phase: current.phase,
           error: current.error?.code,
         });
-        if (state.ok) break;
+        if (state.ok && !current.pending) {
+          recovered = true;
+          break;
+        }
         await new Promise((resolve) => setTimeout(resolve, 1500));
+      }
+      if (!recovered) {
+        log({ stage: 'static_history_recovery_unconfirmed' });
+        process.exitCode = 1;
       }
     }
   } finally {
