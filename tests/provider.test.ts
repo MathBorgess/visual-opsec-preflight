@@ -309,6 +309,28 @@ describe('adaptador Agents API — SDK real com HTTP controlado', () => {
     expect(state.turnStatus).toBe('completed');
     expect(state.output).toMatchObject({ summary: 'just completed' });
   });
+  it.each([
+    ['in_progress', 'CONTEXT_PENDING'],
+    ['failed', 'OPENAI_TURN_FAILED'],
+  ])('diferencia histórico vazio de uma sessão %s', async (status, code) => {
+    const client = new OpenAI({
+      apiKey: 'test-key-not-a-credential',
+      maxRetries: 0,
+      fetch: async (input) => {
+        const path = new URL(String(input)).pathname;
+        if (path.endsWith('/turns') || path.endsWith('/items'))
+          return response({ data: [], has_more: false });
+        return response({
+          id: 'as_fixture',
+          status,
+          error: status === 'failed' ? 'static failure' : null,
+        });
+      },
+    });
+    await expect(
+      new OpenAIAgentsProvider(client, 'fixture-model').read('as_fixture'),
+    ).rejects.toMatchObject({ code });
+  });
   it('recupera falha persistida do turno com código e IDs, sem a mensagem privada', async () => {
     const client = new OpenAI({
       apiKey: 'test-key-not-a-credential',

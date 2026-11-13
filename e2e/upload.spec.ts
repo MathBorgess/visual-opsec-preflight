@@ -81,3 +81,40 @@ test('rejeição 413 do servidor sem JSON recebe explicação e diagnóstico', a
   await page.getByText(/Diagnóstico técnico/).click();
   await expect(page.getByRole('main')).toContainText('HTTP_413');
 });
+
+test('registro inicial atrasado continua o acompanhamento sem reenviar a foto', async ({
+  page,
+}) => {
+  let created = false,
+    posts = 0,
+    pending = 0;
+  await page.route('**/api/cases', async (route) => {
+    const response = await route.fetch();
+    if (response.status() === 201) {
+      created = true;
+      posts++;
+    }
+    await route.fulfill({ response });
+  });
+  await page.route('**/api/case', async (route) => {
+    const response = await route.fetch();
+    if (created && route.request().method() === 'GET' && response.ok() && pending++ < 2) {
+      const v = await response.json();
+      await route.fulfill({
+        response,
+        status: 202,
+        json: { pending: true, caseId: v.caseId, mode: v.mode, phase: 'analyzing' },
+      });
+    } else await route.fulfill({ response });
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Usar imagem sintética de exemplo' }).click();
+  await page.getByRole('checkbox', { name: /Esta foto é própria/ }).check();
+  await page.getByRole('button', { name: 'Iniciar simulação' }).click();
+  await expect(page.getByRole('status')).toContainText(/Aguardando registros iniciais/);
+  await expect(
+    page.getByRole('heading', { name: 'Quais sinais podem ser pesquisados?' }),
+  ).toBeVisible({ timeout: 30000 });
+  expect(posts).toBe(1);
+  await expect(page.getByRole('main').getByRole('alert')).toHaveCount(0);
+});

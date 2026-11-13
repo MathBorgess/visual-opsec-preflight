@@ -27,7 +27,7 @@ import {
   type Snapshot,
 } from './provider';
 import { demoProvider } from './demo';
-import { logFailure, snapshotDiagnostic, withDiagnostics } from './diagnostics';
+import { diagnosticEvent, logFailure, snapshotDiagnostic, withDiagnostics } from './diagnostics';
 import { normalizeProviderError, ProviderError } from './provider-error';
 
 const empty: AnalysisData = {
@@ -241,7 +241,12 @@ export function createApi(
               const s = await provider.read(id);
               if (['in_progress', 'requires_action'].includes(s.status)) await provider.cancel(id);
             } catch {
-              /* Deletion can still succeed when history cannot be read. */
+              // Missing initial history does not prevent cancelling a known session.
+              try {
+                await provider.cancel(id);
+              } catch {
+                /* terminal or unavailable */
+              }
             }
             m.deletion[id] = (await provider.delete(id)) ? 'deleted' : 'failed';
           } catch {
@@ -501,7 +506,38 @@ export function createApi(
       }
       return jsonResponse({ ...view(m, loaded, provider.model), report: null }, 202, m);
     } catch (e) {
-      const error = normalizeProviderError(e);
+      let error = normalizeProviderError(e);
+      if (error.code === 'CONTEXT_PENDING' && endpoint === 'get' && manifest) {
+        if (manifest.activeMs + now() - manifest.pendingStartedAt < LIMITS.activeMs) {
+          diagnosticEvent('provider_history_pending');
+          return jsonResponse(
+            {
+              pending: true,
+              caseId: manifest.caseId,
+              mode: manifest.provider,
+              phase: manifest.phase,
+              diagnostic: snapshotDiagnostic(error),
+            },
+            202,
+            manifest,
+          );
+        }
+        manifest.phase = 'failed';
+        manifest.stopReason = 'deadline_reached';
+        manifest.cancellation = 'pending';
+        try {
+          await providerFactory().cancel(
+            manifest.stage === 'research' ? manifest.researchId! : manifest.visualId,
+          );
+        } catch {
+          /* deletion remains available */
+        }
+        error = new AppError(
+          'CONTEXT_TIMEOUT',
+          'O histórico inicial não foi registrado dentro do prazo. Encerre o caso e consulte o diagnóstico.',
+          502,
+        );
+      }
       if (
         submissionAttempted &&
         error instanceof ProviderError &&
@@ -592,6 +628,7 @@ async function load(p: AgentsProvider, m: Manifest): Promise<Loaded> {
         );
       }
     } catch (cause) {
+      if (cause instanceof AppError && cause.code === 'CONTEXT_PENDING') throw cause;
       failure = normalizeProviderError(cause);
       logFailure(failure);
       error =
