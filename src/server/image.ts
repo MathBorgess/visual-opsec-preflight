@@ -10,7 +10,7 @@ import {
   type MetadataRow,
   validBox,
 } from '@/lib/contracts';
-import { minimize } from '@/lib/policy';
+import { maskCredentials, minimize } from '@/lib/policy';
 import { diagnosticEvent } from './diagnostics';
 
 function pngAnimated(buf: Buffer) {
@@ -93,7 +93,13 @@ export async function processImage(
     } catch {
       parseFailed = true;
     }
-    const add = (field: string, present: boolean, value: string, privateValue = false) =>
+    const add = (
+      field: string,
+      present: boolean,
+      value: string,
+      privateValue = false,
+      providedValue?: string,
+    ) =>
       rows.push({
         id: 'M' + String(rows.length + 1).padStart(2, '0'),
         field,
@@ -104,15 +110,31 @@ export async function processImage(
             ? value
             : 'Não encontrado nos campos suportados.',
         private: privateValue,
+        ...(!parseFailed && present && providedValue
+          ? { providedValue: maskCredentials(providedValue).slice(0, 1000) }
+          : {}),
       });
+    const fields = (keys: string[]) =>
+      keys
+        .filter((key) => parsed?.[key] !== undefined)
+        .map((key) => `${key}: ${String(parsed?.[key])}`)
+        .join('; ');
     add(
       'GPS',
       !!parsed &&
         ['GPSLatitude', 'GPSLongitude', 'latitude', 'longitude'].some(
           (k) => parsed[k] !== undefined,
         ),
-      'Coordenadas presentes; valores omitidos e não enviados à busca.',
+      'Coordenadas registradas no arquivo; não comprovam localização atual nem são enviadas à busca.',
       true,
+      fields([
+        'latitude',
+        'longitude',
+        'GPSLatitude',
+        'GPSLatitudeRef',
+        'GPSLongitude',
+        'GPSLongitudeRef',
+      ]),
     );
     for (const key of ['Make', 'Model', 'Software'])
       add(key, parsed?.[key] !== undefined, minimize(String(parsed?.[key] ?? '').slice(0, 120)));
@@ -120,6 +142,8 @@ export async function processImage(
       'Data de captura',
       parsed?.DateTimeOriginal !== undefined,
       'Data registrada no arquivo; fuso e autenticidade não confirmados.',
+      false,
+      fields(['DateTimeOriginal']),
     );
     add(
       'Autoria/identificadores',
@@ -127,8 +151,9 @@ export async function processImage(
         ['Artist', 'OwnerName', 'BodySerialNumber', 'ImageUniqueID', 'Copyright'].some(
           (k) => parsed[k] !== undefined,
         ),
-      'Campo pessoal ou identificador presente; valor omitido.',
+      'Campo de autoria ou identificador registrado no arquivo; não confirma identidade.',
       true,
+      fields(['Artist', 'OwnerName', 'BodySerialNumber', 'ImageUniqueID', 'Copyright']),
     );
     rows.push({
       id: 'M07',

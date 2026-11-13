@@ -21,6 +21,8 @@ import {
   validateResearch,
   isSensitive,
   safeUrl,
+  presentEvidence,
+  publicResearchPurpose,
 } from '@/lib/policy';
 import { buildReport } from '@/lib/report';
 import { processImage } from './image';
@@ -441,7 +443,7 @@ export function createApi(
             const domains = (action.domains ?? []).map((s) => s.toLowerCase().trim());
             const seeds = approveSeeds(loaded.analysis, action.seedIds ?? [], domains).map((s) => ({
               ...s,
-              purpose: 'Encontrar contexto público para o sinal aprovado, sem investigar pessoas.',
+              purpose: publicResearchPurpose(s.classification),
             }));
             m.allowedSeedIds = seeds.map((s) => s.id);
             m.allowedDomains = domains;
@@ -484,7 +486,7 @@ export function createApi(
             .filter((s) => m.allowedSeedIds.includes(s.id))
             .map((s) => ({
               ...s,
-              purpose: 'Encontrar contexto público para o sinal aprovado, sem investigar pessoas.',
+              purpose: publicResearchPurpose(s.classification),
             }));
           await submit(start, m, {
             stage: 'research',
@@ -919,11 +921,7 @@ function view(m: Manifest, l: Loaded, model: string): CaseView {
     analysis: {
       ...l.analysis,
       seeds: l.analysis.seeds.filter((s) => !isSensitive(s.text)),
-      evidence: l.analysis.evidence.map((e) => ({
-        ...e,
-        description:
-          e.sensitivity === 'private' ? 'Dado privado presente; valor omitido.' : e.description,
-      })),
+      evidence: l.analysis.evidence.map(presentEvidence),
     },
     research: l.research,
     report,

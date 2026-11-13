@@ -15,7 +15,7 @@ O documento é um material educativo de exposição, não prova pericial, confir
 | 1. Identificação e escopo | ID do caso, data da análise, versão do contrato/política, foto/derivada por referência, objetivo e autorizações; nenhum nome de arquivo pessoal no cabeçalho |
 | 2. Resumo de exposição | Principais achados sustentados, limite mais importante e contexto que continua desconhecido; sem score global |
 | 3. O que a foto mostra | Inventário de regiões/textos/objetos, leitura e limitações; separar informações fornecidas pelo usuário |
-| 4. O que o arquivo registra | Metadados suportados presentes/ausentes/falhos, significado e ressalvas; valores sensíveis minimizados |
+| 4. O que o arquivo registra | Metadados suportados presentes/ausentes/falhos, valores fornecidos em `providedValue`, significado e ressalvas; credenciais mascaradas |
 | 5. O que a web acrescentou | Sementes liberadas, perguntas, rodadas, fontes, trechos disponíveis, datas e estado de recuperação |
 | 6. Achados e correlações | Cadeia de evidências, inferência, alternativas, estado epistemológico, prioridade e recomendação |
 | 7. Redução de exposição | Ações específicas e verificáveis que o autor pode tomar; distinguir recomendação de ação efetivamente realizada |
@@ -74,7 +74,9 @@ Mostrar por que uma pista não foi aprofundada e que evidência faltou. Parada d
 
 O JSON é o documento canônico versionado; HTML da interface e Markdown de download são apresentações dos mesmos dados validados. O schema formal e seu validador serão implementados a partir deste contrato, com fixture positiva e casos negativos.
 
-O download padrão minimiza dados pessoais, não incorpora foto/miniaturas/base64, nomes de arquivo privados ou cookies. Uma exportação detalhada exige escolha explícita do autor e revisão dos valores; não é anexada à busca ou publicada automaticamente.
+Conforme a orientação do autor de preservar dados do material enviado, o documento inclui nomes/cargos literalmente legíveis em `verbatimText` e valores de GPS, autoria e data do arquivo em `providedValue`. A transcrição exige `kind=visual` e região; é leitura do modelo sujeita a erro. Outros tipos de evidência não recebem essa exceção. Credenciais continuam mascaradas inclusive nesses campos; descrições e inferências mantêm minimização de identificadores privados.
+
+Interface, JSON e Markdown mostram os mesmos valores com origem. Eles não confirmam identidade, presença atual, vínculo profissional ou rotina; não autorizam pesquisa por pessoas. O download não incorpora foto/miniaturas/base64, nome de arquivo privado ou cookies, não é publicado nem enviado à busca. A interface pede revisão antes de compartilhar.
 
 Marcar status de execução `completed`, `partial`, `failed` ou `cancelled`, sem equiparar conclusão do turno à qualidade da análise. Registrar modelo/configuração, versões dos extratores/prompts, limites, trabalho efetivo e uso/custo conhecido; desconhecido permanece nulo/indisponível.
 

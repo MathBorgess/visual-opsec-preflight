@@ -12,12 +12,30 @@ export function isSensitive(value: string) {
   return sensitive.test(value);
 }
 export function minimize(value: string) {
-  return value
+  return maskCredentials(value)
     .replace(/[\w.+-]+@[\w.-]+\.[a-z]{2,}/gi, '[e-mail omitido]')
-    .replace(/\b(?:sk-|ghp_|AKIA)[\w-]{8,}|\bBearer\s+[\w.-]+/gi, '[credencial omitida]')
-    .replace(/\b(?:password|senha|token|api.?key)\s*[:=]\s*[^\s\\"',;}\]]+/gi, '[segredo omitido]')
     .replace(/\b\d{3}\.\d{3}\.\d{3}-\d{2}\b|\b\d{11,}\b/g, '[documento omitido]')
     .replace(/-?\d{1,3}\.\d{4,}\s*[,;]\s*-?\d{1,3}\.\d{4,}/g, '[coordenadas omitidas]');
+}
+export function maskCredentials(value: string) {
+  return value
+    .replace(/\b(?:sk-|ghp_|AKIA)[\w-]{8,}|\bBearer\s+[\w.-]+/gi, '[credencial omitida]')
+    .replace(
+      /\b(?:password|senha|token|api[ _.-]?key)\b["']?\s*[:=]\s*(?:"(?:\\.|[^"\\])*(?:"|$)|'(?:\\.|[^'\\])*(?:'|$)|[^\s\\"',;}\]]+)/gi,
+      '[segredo omitido]',
+    );
+}
+export function presentEvidence(e: AnalysisData['evidence'][number]) {
+  return {
+    ...e,
+    description:
+      e.sensitivity === 'private'
+        ? 'Dado pessoal presente no material fornecido; consulte a transcrição e sua limitação.'
+        : minimize(e.description),
+    // Only direct visual readings have an exemption from generic minimization.
+    verbatimText:
+      e.kind === 'visual' && e.bbox && e.verbatimText ? maskCredentials(e.verbatimText) : null,
+  };
 }
 export function publicDomain(host: string): boolean {
   return (
@@ -69,6 +87,23 @@ export function approveSeeds(analysis: AnalysisData, ids: string[], domains: str
       'Use domínios públicos, sem protocolo, porta ou caminho, com até 512 caracteres no total.',
     );
   return seeds as AnalysisData['seeds'];
+}
+export function publicResearchPurpose(
+  classification: AnalysisData['seeds'][number]['classification'],
+) {
+  const purposes = {
+    public_event:
+      'Confirmar nome, edição, organizador e contexto público do evento; procurar alternativas, sem atribuir presença ou rotina a pessoas.',
+    public_organization:
+      'Verificar atividade declarada e contexto público da organização em fonte oficial; não atribuir vínculo profissional a pessoas da foto.',
+    public_domain:
+      'Verificar a entidade e a finalidade pública do domínio aprovado; não consultar contas, contatos ou identificadores pessoais.',
+    public_place:
+      'Verificar denominação e características públicas do local e possíveis homônimos; não localizar residência nem inferir presença atual ou deslocamentos.',
+    product:
+      'Verificar fabricante, modelo e documentação do produto legível; explicar exposição contextual sem inferir profissão, renda ou hábitos de pessoas.',
+  };
+  return purposes[classification];
 }
 export function validateResearch(
   result: ResearchData,

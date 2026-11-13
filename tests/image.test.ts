@@ -6,6 +6,25 @@ import { preflightImage } from '@/lib/upload';
 import { processImage } from '@/server/image';
 
 describe('parser e derivada reais', () => {
+  it.each([
+    'senha="segredoficticio com espaços"',
+    '{"token":"segredoficticio"}',
+    "api_key='segredoficticio'",
+  ])('mascara credencial entre aspas no campo de autoria: %s', async (artist) => {
+    const jpeg = await sharp({
+      create: { width: 20, height: 20, channels: 3, background: 'white' },
+    })
+      .jpeg()
+      .withExif({ IFD0: { Artist: 'Ana Exemplo; ' + artist } })
+      .toBuffer();
+    const result = await processImage(jpeg);
+    const value = result.info.metadata.find(
+      (m) => m.field === 'Autoria/identificadores',
+    )?.providedValue;
+    expect(value).toContain('Ana Exemplo');
+    expect(value).toContain('[segredo omitido]');
+    expect(JSON.stringify(result.info)).not.toContain('segredoficticio');
+  });
   it('aceita PNG estático, remove metadados e declara a cobertura do extrator', async () => {
     const png = await sharp({
       create: { width: 320, height: 180, channels: 4, background: '#aabbcc88' },
@@ -63,7 +82,9 @@ describe('parser e derivada reais', () => {
     );
     expect(metadata.exif).toBeUndefined();
     expect(metadata.xmp).toBeUndefined();
-    expect(JSON.stringify(result.info)).not.toContain('PRIVATE_FIXTURE');
+    expect(
+      result.info.metadata.find((row) => row.field === 'Autoria/identificadores')?.providedValue,
+    ).toContain('Artist: PRIVATE_FIXTURE');
     await expect(
       preflightImage(new File([new Uint8Array(input)], 'fixture.jpg')),
     ).resolves.toMatchObject({ width: 2048, height: 2048 });

@@ -29,6 +29,9 @@ Entregar um documento de exposição virtual que responda: “O que esta foto e 
 | RF-17 | Planejar perguntas e ações | Até cinco perguntas, cada uma ligada a evidências e critério de suficiência; proposta declara ganho esperado e dados divulgados |
 | RF-18 | Aplicar parada por ramo e global | Ramo suficiente encerra; tentativa adicional sem ganho conclui inconclusivo; duas ações consecutivas sem ganho param a exploração; limites seguem o contrato do loop |
 | RF-19 | Explicar encerramento e fontes | Dossiê registra motivo de parada, cobertura, pendências e estado remoto; fontes manuais não são apresentadas como consultadas automaticamente |
+| RF-20 | Preservar valores fornecidos | Transcrição em `verbatimText` exige região visual; `providedValue` contém GPS/autoria/data de campos suportados. Interface, JSON e Markdown mostram origem e limitações; credenciais continuam mascaradas |
+| RF-21 | Priorizar exploração proativa | Agente inventaria sinais diversos, propõe até cinco perguntas com ganho esperado e explora recortes/contexto público; controlador mantém três recortes, duas rodadas e 180 segundos de trabalho ativo |
+| RF-22 | Distinguir contexto profissional e pessoal | Nome/cargo legível é transcrição, sem atribuição a rosto. Pesquisa contextualiza organizações, eventos, locais públicos e produtos; não procura perfis individuais nem infere residência, rotina ou deslocamentos |
 
 ## Requisitos não funcionais
 

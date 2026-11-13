@@ -6,16 +6,28 @@ import {
   type Report,
   type ResearchData,
 } from './contracts';
-import { minimize } from './policy';
+import { maskCredentials, minimize, presentEvidence } from './policy';
 
 export function minimizeReport(report: Report): Report {
   // Redact string values while JSON still knows their types. Rewriting the
   // serialized document can corrupt numeric boxes, counters or escaped text.
-  return JSON.parse(
+  const clean = JSON.parse(
     JSON.stringify(report, (_key, value: unknown) =>
       typeof value === 'string' ? minimize(value) : value,
     ),
   ) as Report;
+  // Preserve only explicitly supplied readings, separately from derived claims.
+  clean.visual = report.visual.map((e, i) => ({
+    ...clean.visual[i],
+    verbatimText: presentEvidence(e).verbatimText,
+  }));
+  clean.metadata = report.metadata.map((m, i) => ({
+    ...clean.metadata[i],
+    ...(m.state === 'present' && m.providedValue
+      ? { providedValue: maskCredentials(m.providedValue) }
+      : { providedValue: undefined }),
+  }));
+  return clean;
 }
 
 export function buildReport(
@@ -68,11 +80,7 @@ export function buildReport(
     summary:
       synthesis?.summary ??
       'Documento parcial com as evidências disponíveis. Consulte o motivo de parada e as perguntas não resolvidas.',
-    visual: analysis.evidence.map((e) => ({
-      ...e,
-      description:
-        e.sensitivity === 'private' ? 'Dado privado presente; conteúdo omitido.' : e.description,
-    })),
+    visual: analysis.evidence.map(presentEvidence),
     metadata: initial.image.metadata,
     research: {
       state: research
@@ -92,8 +100,10 @@ export function buildReport(
         ? {
             ...f,
             title: 'Dado privado que merece revisão',
-            statement: 'Há informação privada na evidência; o valor foi omitido.',
-            explanation: 'A evidência foi minimizada para não ampliar sua divulgação.',
+            statement:
+              'Há informação pessoal na evidência; consulte os valores fornecidos e sua origem nas seções 3 e 4.',
+            explanation:
+              'A transcrição ou o registro no arquivo não confirma a identidade de alguém na foto.',
             alternatives: ['O arquivo pode ter sido alterado; presença não comprova atualidade.'],
             limitations: ['Valores privados não são usados como termos de busca.'],
             priorityReason: 'Possível exposição direta de dado privado.',
@@ -142,7 +152,7 @@ export function buildReport(
     },
     method: {
       model,
-      promptVersion: '1',
+      promptVersion: '2',
       imageProcessor: 'Sharp + exifr; extração determinística e visão sujeita a erro',
       sourceCatalog: [
         'Foto e metadados',
@@ -173,9 +183,19 @@ export function reportMarkdown(r: Report): string {
     '## 2. Resumo de exposição',
     clean(r.summary),
     '## 3. O que a foto mostra',
-    list(r.visual.map((e) => `${e.id}: ${e.description} — ${e.limitation}`)),
+    list(
+      r.visual.map(
+        (e) =>
+          `${e.id}: ${e.description}${e.verbatimText ? `; texto legível fornecido: ${e.verbatimText} (leitura do modelo; não confirma identidade)` : ''} — ${e.limitation}`,
+      ),
+    ),
     '## 4. O que o arquivo registra',
-    list(r.metadata.map((m) => `${m.field} (${m.state}): ${m.value}`)),
+    list(
+      r.metadata.map(
+        (m) =>
+          `${m.field} (${m.state}): ${m.providedValue ? m.providedValue + '; ' : ''}${m.value}`,
+      ),
+    ),
     '## 5. O que a web acrescentou',
     'Estado: ' + r.research.state,
     list(
