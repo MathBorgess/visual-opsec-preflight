@@ -206,6 +206,7 @@ export class OpenAIAgentsProvider implements AgentsProvider {
         requests: Record<string, unknown>[] = [],
         visitedUrls: string[] = [];
       let output: unknown = null;
+      const history = { items: items.length, userMessages: 0, inputTextChars: 0, parseFailures: 0 };
       for (const item of items) {
         if (
           item.type === 'web_search_call' &&
@@ -215,16 +216,29 @@ export class OpenAIAgentsProvider implements AgentsProvider {
         )
           visitedUrls.push(item.action.url);
         if (item.type !== 'message') continue;
-        const txt = item.content
+        const textParts = item.content
           .filter((c) => c.type === 'input_text' || c.type === 'output_text')
-          .map((c) => c.text)
-          .join('');
+          .map((c) => c.text);
+        const txt = textParts.join('');
         if (item.role === 'user') {
-          try {
-            const parsed = JSON.parse(txt);
-            if (record(parsed)) requests.push(parsed);
-          } catch {
-            /* unknown user item is not an application checkpoint */
+          history.userMessages++;
+          history.inputTextChars += txt.length;
+          // A multimodal message can contain independent text parts. Do not
+          // corrupt the checkpoint by concatenating it with an image annotation.
+          for (const candidate of [...textParts, ...(textParts.length > 1 ? [txt] : [])]) {
+            try {
+              let parsed = parseJSON(candidate);
+              if (typeof parsed === 'string') parsed = parseJSON(parsed);
+              if (
+                record(parsed) &&
+                ['analysis', 'region', 'research', 'synthesis'].includes(String(parsed.kind))
+              ) {
+                requests.push(parsed);
+                break;
+              }
+            } catch {
+              history.parseFailures++;
+            }
           }
         } else if (item.phase === 'final_answer' && item.status === 'completed') {
           let parsed: unknown;
@@ -248,24 +262,16 @@ export class OpenAIAgentsProvider implements AgentsProvider {
           id,
           turn?.id,
         )!;
-      if (
-        !initial &&
-        !items.some((item) => item.type === 'message' && item.role === 'user') &&
-        session.status !== 'failed' &&
-        turn?.status !== 'failed'
-      )
+      if (!initial) {
+        providerDiagnostic({ history });
+        diagnosticEvent('provider_history_pending', history);
         throw new AppError(
           'CONTEXT_PENDING',
           'Sessão aceita; aguardando o registro do histórico inicial.',
           503,
-          { retryable: true },
+          { retryable: true, provider: { sessionId: safeId(id), history } },
         );
-      if (!initial)
-        throw new AppError(
-          'MISSING_CONTEXT',
-          'A sessão não contém o contexto esperado do caso.',
-          502,
-        );
+      }
       return {
         id,
         status: session.status,

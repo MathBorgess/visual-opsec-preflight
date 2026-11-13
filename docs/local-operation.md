@@ -64,3 +64,5 @@ A sonda administrativa `scripts/diagnose-agents.mjs` exige `OPSEC_SYNTHETIC_DIAG
 
 
 A criação aceita pode anteceder em alguns segundos a persistência das mensagens iniciais. Histórico ainda vazio retorna HTTP 202 com `pending=true`, mantendo a mesma referência. A interface mostra a espera e continua o polling sem reenviar a foto. A mesma regra cobre a nova sessão de pesquisa; o prazo de trabalho ativo continua valendo e falhas de turno preservam o diagnóstico do provedor.
+
+O próprio registro de mensagem pode aparecer antes de seu conteúdo estar completo. Isso também mantém HTTP 202 até existir um checkpoint JSON utilizável, dentro do prazo ativo. O diagnóstico informa contagens de itens/mensagens, quantidade de caracteres e falhas de parse, sem registrar texto ou imagem.

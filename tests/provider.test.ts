@@ -331,6 +331,65 @@ describe('adaptador Agents API — SDK real com HTTP controlado', () => {
       new OpenAIAgentsProvider(client, 'fixture-model').read('as_fixture'),
     ).rejects.toMatchObject({ code });
   });
+  it.each(['', '{"kind":'])(
+    'mantém a espera quando a mensagem já existe mas o conteúdo ainda é incompleto: %s',
+    async (text) => {
+      const client = new OpenAI({
+        apiKey: 'test-key-not-a-credential',
+        maxRetries: 0,
+        fetch: async (input) => {
+          const path = new URL(String(input)).pathname;
+          if (path.endsWith('/turns')) return response({ data: [], has_more: false });
+          if (path.endsWith('/items'))
+            return response({
+              data: [{ type: 'message', role: 'user', content: [{ type: 'input_text', text }] }],
+              has_more: false,
+            });
+          return response({ id: 'as_fixture', status: 'in_progress' });
+        },
+      });
+      await expect(
+        new OpenAIAgentsProvider(client, 'fixture-model').read('as_fixture'),
+      ).rejects.toMatchObject({
+        code: 'CONTEXT_PENDING',
+        details: {
+          provider: {
+            history: { items: 1, userMessages: 1, inputTextChars: text.length, parseFailures: 1 },
+          },
+        },
+      });
+    },
+  );
+  it.each(['multipart', 'encoded'])(
+    'recupera checkpoint multimodal sem concatenar anotação adicional: %s',
+    async (mode) => {
+      const payload = JSON.stringify(initial);
+      const content =
+        mode === 'multipart'
+          ? [
+              { type: 'input_text', text: payload },
+              { type: 'input_text', text: 'Synthetic image annotation.' },
+            ]
+          : [{ type: 'input_text', text: JSON.stringify(payload) }];
+      const client = new OpenAI({
+        apiKey: 'test-key-not-a-credential',
+        maxRetries: 0,
+        fetch: async (input) => {
+          const path = new URL(String(input)).pathname;
+          if (path.endsWith('/turns')) return response({ data: [], has_more: false });
+          if (path.endsWith('/items'))
+            return response({
+              data: [{ type: 'message', role: 'user', content }],
+              has_more: false,
+            });
+          return response({ id: 'as_fixture', status: 'in_progress' });
+        },
+      });
+      expect(
+        (await new OpenAIAgentsProvider(client, 'fixture-model').read('as_fixture')).initial,
+      ).toMatchObject(initial);
+    },
+  );
   it('recupera falha persistida do turno com código e IDs, sem a mensagem privada', async () => {
     const client = new OpenAI({
       apiKey: 'test-key-not-a-credential',
