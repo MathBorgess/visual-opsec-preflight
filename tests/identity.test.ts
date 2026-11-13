@@ -55,6 +55,70 @@ function source(id: string, seedId: string, extra: Partial<SourceData> = {}): So
 }
 
 describe('identidade declarada com autorização', () => {
+  it.each([false, true])(
+    'deduplicação preserva apoio atribuível independente da ordem (invertida=%s)',
+    (reverse) => {
+      const exposure = {
+        category: 'professional_profile' as const,
+        dataClasses: ['role' as const],
+        match: 'declared_identity' as const,
+      };
+      const research: ResearchData = {
+        sources: [
+          source('W1', 'PID1', { exposure }),
+          source('W2', 'PID1', { exposure: { ...exposure, match: 'possible_homonym' } }),
+          source('W3', 'PID1', { exposure, retrievalState: 'unavailable' }),
+        ],
+        findings: [],
+        limitations: [],
+        followup: null,
+        discovered: [
+          {
+            facet: 'profession',
+            value: 'Engenheira',
+            sourceIds: ['W2'],
+            match: 'possible_homonym',
+          },
+          {
+            facet: 'profession',
+            value: 'Engenheira',
+            sourceIds: ['W3'],
+            match: 'declared_identity',
+          },
+          {
+            facet: 'profession',
+            value: 'Engenheira',
+            sourceIds: ['W1'],
+            match: 'declared_identity',
+          },
+          {
+            facet: 'profession',
+            value: 'Engenheira',
+            sourceIds: ['W1'],
+            match: 'declared_identity',
+          },
+        ],
+      };
+      if (reverse) research.discovered!.reverse();
+      const clean = validateResearch(
+        research,
+        analysis,
+        ['PID1'],
+        [],
+        'openai',
+        research.sources.map((s) => s.url),
+      );
+      expect(clean.discovered).toHaveLength(2);
+      const attributed = clean.discovered!.find((d) => d.match === 'declared_identity');
+      expect(new Set(attributed?.sourceIds)).toEqual(new Set(['W1', 'W3']));
+      const card = attributedIdentityData(clean);
+      const report = identityExposure(identity, analysis.seeds, clean, ['PID1'], 1);
+      expect(card.discovered).toEqual([
+        { facet: 'profession', value: 'Engenheira', sourceIds: ['W1'] },
+      ]);
+      expect(card.discovered).toEqual(report.discovered);
+    },
+  );
   it('cartão e dossiê atribuem descobertas somente a fontes disponíveis da identidade', () => {
     const attributed = {
       category: 'professional_profile' as const,
