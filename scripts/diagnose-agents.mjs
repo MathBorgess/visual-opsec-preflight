@@ -163,6 +163,46 @@ if (process.env.OPSEC_PROBE_FULL_CASE === '1') {
       error: data.error?.code,
     });
     if (!response.ok) process.exitCode = 1;
+    if (response.ok) {
+      const id = data.diagnostic?.provider?.sessionId;
+      for (let attempt = 0; id && attempt < 4; attempt++) {
+        const saved = await client.beta.agents.sessions.items.list(id, {
+          order: 'asc',
+          limit: 100,
+        });
+        log({
+          stage: 'static_history_shape',
+          attempt,
+          items: saved.data.map((item) => ({
+            type: item.type,
+            role: item.role,
+            phase: item.phase,
+            keys: Object.keys(item),
+            content: item.content?.map((c) => ({
+              type: c.type,
+              keys: Object.keys(c),
+              textLength: typeof c.text === 'string' ? c.text.length : null,
+            })),
+          })),
+        });
+        const state = await caseRoute.GET(
+          new Request(origin + '/api/case', {
+            headers: { Host: new URL(origin).host, Cookie: cookie },
+          }),
+        );
+        const set = state.headers.get('set-cookie');
+        if (set) cookie = set.split(';')[0];
+        const current = await state.json();
+        log({
+          stage: 'static_full_poll',
+          status: state.status,
+          phase: current.phase,
+          error: current.error?.code,
+        });
+        if (state.ok) break;
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+      }
+    }
   } finally {
     if (cookie) {
       let confirmed = false;
