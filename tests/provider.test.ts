@@ -35,7 +35,8 @@ describe('adaptador Agents API — SDK real com HTTP controlado', () => {
               error: {
                 code,
                 param: 'agent.text.format',
-                message: 'PRIVATE_PROVIDER_MESSAGE pessoa@example.invalid',
+                message:
+                  'Invalid schema prefixItems. PRIVATE_PROVIDER_MESSAGE pessoa@example.invalid',
               },
             }),
             {
@@ -58,7 +59,13 @@ describe('adaptador Agents API — SDK real com HTTP controlado', () => {
         definitive: Number(status) < 500,
         details: {
           retryable,
-          provider: { status, code, param: 'agent.text.format', requestId: 'req_fixture' },
+          provider: {
+            status,
+            code,
+            param: 'agent.text.format',
+            requestId: 'req_fixture',
+            hints: ['schema', 'prefixItems'],
+          },
         },
       });
       expect(JSON.stringify(failure)).not.toContain('PRIVATE_PROVIDER_MESSAGE');

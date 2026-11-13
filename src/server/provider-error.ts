@@ -21,7 +21,19 @@ export function normalizeProviderError(error: unknown): AppError {
     const status = error.status;
     const code = safeId(error.code);
     const retry = Number(error.headers?.get('retry-after'));
+    // Fixed protocol keywords only; never copy the provider's free-form message.
+    const hints = [
+      'schema',
+      'prefixItems',
+      'model',
+      'image',
+      'environment',
+      'tool',
+      'limit',
+      'quota',
+    ].filter((term) => new RegExp(`\\b${term}\\b`, 'i').test(error.message));
     const provider = {
+      ...(hints.length ? { hints } : {}),
       status,
       code,
       param: safeId(error.param),
