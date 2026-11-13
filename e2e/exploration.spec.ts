@@ -15,6 +15,7 @@ function scenario(): CaseView {
       metadata: [],
       limitations: [],
     },
+    identity: null,
     analysis: {
       evidence: [
         {

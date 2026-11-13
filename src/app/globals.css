@@ -705,6 +705,145 @@ footer a {
 .skip:focus {
   top: 10px;
 }
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.identity-fieldset {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px 18px 4px;
+  margin: 22px 0;
+  background: #f7f8f1;
+  min-width: 0;
+}
+.identity-fieldset > legend {
+  font-size: 13px;
+  font-weight: 700;
+  padding: 0 6px;
+}
+.identity-fieldset > p {
+  font-size: 12px;
+  line-height: 1.7;
+  margin: 4px 0 12px;
+}
+.identity-fieldset .field {
+  margin: 16px 0;
+}
+.radio-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 22px;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+input[type='radio'] {
+  accent-color: var(--deep);
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+.identity-card {
+  margin-bottom: 25px;
+  border-left: 4px solid var(--deep);
+}
+.identity-card h3 {
+  margin: 6px 0;
+}
+.identity-card p {
+  font-size: 13px;
+  margin: 6px 0;
+  overflow-wrap: anywhere;
+}
+.seed-group {
+  font-size: 16px;
+  margin: 26px 0 10px;
+}
+.search-review .seed + .seed {
+  margin-top: 10px;
+}
+.seed.identity {
+  background: #f6f1e7;
+  border-color: #e6d9c4;
+}
+.tag.exposure {
+  background: #f6f1e7;
+  border-color: #e6d9c4;
+  color: #6d4a2c;
+}
+.dossier h4.subsection {
+  margin-top: 28px;
+  font-size: 16px;
+}
+.identity-callout {
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: #eaf1dd;
+}
+.breadth {
+  display: inline-flex;
+  flex-direction: column;
+  padding: 12px 18px;
+  margin: 6px 0 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: #f3f5ec;
+}
+.breadth span {
+  font-size: 9px;
+  letter-spacing: 1.2px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.breadth strong {
+  font-size: 24px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+.breadth-moderate {
+  background: #f8f0dc;
+  border-color: #e7d6ab;
+}
+.breadth-high {
+  background: #faebe2;
+  border-color: #e6c3ad;
+  color: #8e4729;
+}
+.chips {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0 16px;
+}
+.dossier .chips li {
+  font-size: 11px;
+  line-height: 1.4;
+  padding: 5px 11px;
+  border-radius: 999px;
+  background: #eaf1dd;
+  border: 1px solid #d6decd;
+}
+.trail {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 16px;
+}
+.trail li {
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+.trail .arrow {
+  color: var(--muted);
+  margin: 0 7px;
+}
 @media (min-width: 1600px) {
   main {
     padding: 0 70px;

@@ -10,6 +10,21 @@ Categorias de curadoria: textos/identificadores visíveis; telas/documentos; amb
 
 Não identificar desconhecidos por rosto, inferir residência/rotina, fazer rastreamento, classificar atributos pessoais sensíveis ou procurar credenciais vazadas. Transcrições e valores fornecidos no arquivo são exibidos com origem e ressalvas, sem usá-los como pivô público; credenciais permanecem mascaradas.
 
+## Identidade autorizada
+
+Para mostrar quanto uma foto e uma identidade revelam juntas, o autor pode declarar nome, profissão e até três atividades de quem aparece na foto: a própria identidade ou a de alguém que autorizou expressamente a pesquisa educativa. A identidade é contexto fornecido (`UID*`, `user_context`), nunca reconhecida pelo rosto.
+
+| Passo | Controle |
+| --- | --- |
+| Criação | Consentimento separado; campos sem e-mail, telefone, documento ou link; validação no navegador e no backend antes de qualquer chamada |
+| Análise visual | Recebe `declaredIdentity` e pode apontar quando texto/objetos da foto coincidem com a identidade; não pode propor sementes de identidade (`IDENTITY_SEED_FROM_MODEL`) |
+| Revisão | O backend deriva `PID1` (`"nome" profissão`) e `PID2..` (`"nome" atividade`); o autor libera ou exclui cada uma |
+| Pesquisa | Sessão web recebe somente as sementes liberadas, `identityScope` e perguntas de cruzamento escritas pelo backend para os sinais da foto liberados; sem foto, contexto ou inventário |
+| Validação | Fontes de agregadores excluídos são descartadas com achados dependentes; fonte de identidade sem classificação conta como possível homônimo |
+| Síntese e dossiê | `identityExposure`, calculado de forma determinística, orienta o resumo e a seção 5.1 |
+
+A cadeia de uma corroboração sobre a identidade é `achado → fonte web → semente PID → evidência UID`. Uma menção em programação de evento ou página institucional mostra como foto e identidade se reforçam; não comprova presença, vínculo atual, localização ou rotina.
+
 ## Exploração proativa e dados fornecidos
 
 Inventariar sinais complementares, priorizar perguntas pelo ganho verificável e escolher a próxima ação: recorte para texto ambíguo, pesquisa de contexto público para uma semente revisada ou conclusão com limitação. Procurar alternativas e contradições, em vez de acumular páginas. A automação executa recortes elegíveis e rodadas úteis dentro do orçamento; a revisão de sementes delimita a sessão web.

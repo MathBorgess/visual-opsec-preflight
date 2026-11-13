@@ -34,12 +34,12 @@ Premissa de desenho: primeira versão privada para uso do autor e preparação d
 
 ## Jornada implementada
 
-1. Selecionar uma única foto JPEG/PNG própria ou autorizada e revisar o envio para processamento remoto.
+1. Selecionar uma única foto JPEG/PNG própria ou autorizada e revisar o envio para processamento remoto. Opcionalmente, declarar a identidade de quem aparece nela (nome, profissão e até três atividades), com autorização própria.
 2. Inventariar metadados antes de criar uma derivada orientada, sem metadados embutidos.
 3. Analisar a foto pela Agents API e explorar até três regiões da mesma imagem.
-4. Revisar os sinais públicos liberados à pesquisa; consultas compatíveis avançam sem confirmação repetida.
+4. Revisar os sinais públicos liberados à pesquisa e, se declarada, a identidade autorizada; consultas compatíveis avançam sem confirmação repetida.
 5. Enriquecer os achados por web search em sessão separada, sem foto ou inventário privado.
-6. Ler o documento de exposição virtual com evidências, fontes, contradições, limites e recomendações.
+6. Ler o documento de exposição virtual com evidências, fontes, contradições, limites e recomendações; com identidade, a seção 5.1 mostra onde ela aparece, que dados ficam alcançáveis e a amplitude observada.
 7. Exportar o documento e encerrar o caso, com estado explícito da exclusão das sessões remotas.
 
 A chave `OPENAI_API_KEY` é configurada como variável **Secret** do projeto Vercel, acessível ao backend. Nenhum valor será colocado no repositório, navegador ou contexto do agente.
@@ -65,6 +65,6 @@ A chave `OPENAI_API_KEY` é configurada como variável **Secret** do projeto Ver
 
 O desenho de 2026-11-13 substitui a proposta anterior de CLI offline em Python/Tesseract e a lista ampla de integrações OpenAI. A V1 usa Next.js/TypeScript, Sharp/exifr e SDK OpenAI 7.56.0. Sanitização/exportação de uma nova foto ficam para evolução posterior. O [schema inicial de candidatos visuais](schemas/finding.schema.json) permanece como referência histórica; os contratos executáveis estão em [src/lib/contracts.ts](src/lib/contracts.ts).
 
-Fotos e documentos de terceiros exigem autorização. O projeto não faz reconhecimento facial, identificação de desconhecidos, inferência de residência/rotina ou classificação de atributos pessoais sensíveis. As demonstrações usam dados fictícios; o dossiê não certifica segurança nem constitui prova de identidade, presença ou localização atual.
+Fotos e documentos de terceiros exigem autorização. A trilha de identidade parte somente do que o titular, ou alguém autorizado por ele, declarar, para mostrar de forma educativa quanto foto e identidade revelam juntas. O projeto não faz reconhecimento facial, identificação de desconhecidos, inferência de residência/rotina ou classificação de atributos pessoais sensíveis, e não consulta buscadores de pessoas, agregadores de processos ou vazamentos. As demonstrações usam dados fictícios; o dossiê não certifica segurança nem constitui prova de identidade, presença ou localização atual.
 
 Nenhum segredo, foto pessoal ou dossiê privado deve ser versionado. Licença de reutilização ainda não foi escolhida.

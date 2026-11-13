@@ -2,6 +2,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   AppError,
+  IDENTITY_LIMITS,
+  isIdentitySeed,
   type CaseView,
   type PendingCaseView,
   type Diagnostic,
@@ -10,6 +12,13 @@ import {
 import { preflightImage } from '@/lib/upload';
 import { minimizeReport, reportMarkdown } from '@/lib/report';
 import { safeUrl } from '@/lib/policy';
+import {
+  breadthLabels,
+  categoryLabels,
+  dataClassLabels,
+  parseIdentityForm,
+  relationLabels,
+} from '@/lib/identity';
 
 const phaseNames: Record<string, string> = {
   analyzing: 'Analisando a imagem',
@@ -151,6 +160,12 @@ export function Workspace() {
     [preview, setPreview] = useState(''),
     [context, setContext] = useState(''),
     [consent, setConsent] = useState(false);
+  const [identityName, setIdentityName] = useState(''),
+    [identityProfession, setIdentityProfession] = useState(''),
+    [identityActivities, setIdentityActivities] = useState(''),
+    [identityRelation, setIdentityRelation] = useState<'self' | 'authorized'>('self'),
+    [identityConsent, setIdentityConsent] = useState(false);
+  const identityDeclared = identityName.trim().length > 0;
   const [view, setView] = useState<CaseView | null>(null),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(''),
@@ -389,6 +404,22 @@ export function Workspace() {
     form.set('image', file);
     form.set('context', context);
     form.set('consent', consent ? 'yes' : 'no');
+    if (identityDeclared) {
+      const fields = {
+        name: identityName,
+        profession: identityProfession,
+        activities: identityActivities,
+        relation: identityRelation,
+        consent: identityConsent ? 'yes' : 'no',
+      };
+      // Same validation as the server, before any upload.
+      parseIdentityForm(fields, new Date().toISOString());
+      form.set('identityName', fields.name);
+      form.set('identityProfession', fields.profession);
+      form.set('identityActivities', fields.activities);
+      form.set('identityRelation', fields.relation);
+      form.set('identityConsent', fields.consent);
+    }
     setUploadStage('Enviando foto…');
     await uploadCase(form, requestId, setUploadStage);
     setPendingCase({ phase: 'analyzing' });
@@ -411,6 +442,7 @@ export function Workspace() {
       setView(null);
       setReviewed(null);
       setRecovery(false);
+      setIdentityConsent(false);
       selectedCase.current = '';
     }
   }
@@ -428,7 +460,7 @@ export function Workspace() {
   const steps = [
     'Selecionar a foto',
     'Observar e explorar',
-    'Revisar sinais públicos',
+    'Revisar sinais e identidade',
     'Pesquisar contexto',
     'Revisar o dossiê',
   ];
@@ -479,8 +511,9 @@ export function Workspace() {
             <span>Muitas pistas.</span>
           </h1>
           <p className="lede">
-            Descubra os caminhos que uma imagem abre sobre seu ambiente. Veja o que é observável, o
-            que pode ser conectado e o que continua sendo hipótese.
+            Descubra os caminhos que uma imagem abre sobre seu ambiente e, com autorização, quanto
+            ela e uma identidade revelam juntas na internet. Veja o que é observável, o que pode ser
+            conectado e o que continua sendo hipótese.
           </p>
         </section>
         {config?.mode === 'demo' && (
@@ -618,6 +651,82 @@ export function Workspace() {
                   onChange={(e) => setContext(e.target.value)}
                 />
               </label>
+              <fieldset className="identity-fieldset">
+                <legend>
+                  Identidade autorizada <span className="muted">· opcional</span>
+                </legend>
+                <p className="muted">
+                  Para mostrar quanto uma foto e uma identidade revelam juntas, informe quem aparece
+                  nela. Use somente a sua identidade ou a de alguém que autorizou expressamente.
+                  Nada é identificado pelo rosto: a busca parte apenas do que você declarar.
+                </p>
+                <fieldset className="radio-row">
+                  <legend className="sr-only">De quem é a identidade</legend>
+                  <label className="check compact">
+                    <input
+                      type="radio"
+                      name="identity-relation"
+                      value="self"
+                      checked={identityRelation === 'self'}
+                      onChange={() => setIdentityRelation('self')}
+                    />
+                    Sou eu
+                  </label>
+                  <label className="check compact">
+                    <input
+                      type="radio"
+                      name="identity-relation"
+                      value="authorized"
+                      checked={identityRelation === 'authorized'}
+                      onChange={() => setIdentityRelation('authorized')}
+                    />
+                    Pessoa que me autorizou
+                  </label>
+                </fieldset>
+                <label className="field">
+                  Nome usado publicamente
+                  <input
+                    maxLength={IDENTITY_LIMITS.name}
+                    autoComplete="off"
+                    placeholder="Ex.: Ana Exemplo"
+                    value={identityName}
+                    onChange={(e) => setIdentityName(e.target.value)}
+                  />
+                </label>
+                <label className="field">
+                  Profissão
+                  <input
+                    maxLength={IDENTITY_LIMITS.qualifier}
+                    autoComplete="off"
+                    placeholder="Ex.: professora de física"
+                    value={identityProfession}
+                    onChange={(e) => setIdentityProfession(e.target.value)}
+                  />
+                </label>
+                <label className="field">
+                  Atividades, até {IDENTITY_LIMITS.activities}, uma por linha
+                  <textarea
+                    maxLength={IDENTITY_LIMITS.activities * (IDENTITY_LIMITS.qualifier + 1)}
+                    placeholder={'Ex.: palestrante em eventos de tecnologia\ncorrida de rua'}
+                    value={identityActivities}
+                    onChange={(e) => setIdentityActivities(e.target.value)}
+                  />
+                </label>
+                {identityDeclared && (
+                  <label className="check">
+                    <input
+                      type="checkbox"
+                      checked={identityConsent}
+                      onChange={(e) => setIdentityConsent(e.target.checked)}
+                    />
+                    <span>
+                      Declaro que esta identidade é minha ou que a pessoa autorizou expressamente
+                      esta pesquisa educativa. Nome, profissão e atividades seguem para a análise e,
+                      se liberados na revisão, para buscas públicas; a foto não acompanha a busca.
+                    </span>
+                  </label>
+                )}
+              </fieldset>
               <label className="check">
                 <input
                   type="checkbox"
@@ -633,7 +742,13 @@ export function Workspace() {
                 className="primary"
                 onClick={() => act(start)}
                 disabled={
-                  recovery || !!pendingCase || !file || !consent || busy || !config?.available
+                  recovery ||
+                  !!pendingCase ||
+                  !file ||
+                  !consent ||
+                  (identityDeclared && !identityConsent) ||
+                  busy ||
+                  !config?.available
                 }
               >
                 {busy
@@ -678,12 +793,20 @@ export function Workspace() {
                     a busca.
                   </p>
                 </li>
+                <li>
+                  <strong>Identidade, se declarada</strong>
+                  <p>
+                    Nome, profissão e atividades liberados viram buscas públicas para medir sua
+                    exposição. Buscadores de pessoas, processos e vazamentos ficam fora.
+                  </p>
+                </li>
               </ol>
               <div className="small-card">
                 <strong>Uma pista não é uma certeza.</strong>
                 <p>
-                  O dossiê mostra fontes, alternativas e limites. Ele não identifica pessoas nem
-                  certifica uma foto como segura.
+                  O dossiê mostra fontes, alternativas e limites. Ele não identifica pessoas pelo
+                  rosto nem certifica uma foto como segura; a identidade só entra quando declarada
+                  com autorização.
                 </p>
               </div>
             </aside>
@@ -752,6 +875,26 @@ export function Workspace() {
               <p className="alert" role="alert">
                 {view.error}
               </p>
+            )}
+            {view.identity && (
+              <section className="panel identity-card" aria-labelledby="identity-heading">
+                <p className="eyebrow">
+                  IDENTIDADE AUTORIZADA · {relationLabels[view.identity.relation].toUpperCase()}
+                </p>
+                <h3 id="identity-heading">{view.identity.name}</h3>
+                <p>
+                  {[view.identity.profession, ...view.identity.activities]
+                    .filter(Boolean)
+                    .join(' · ') || 'Sem profissão ou atividades declaradas.'}
+                </p>
+                <p className="muted">
+                  Declarada por você, não reconhecida pelo rosto. A pesquisa mede o que fontes
+                  públicas associam a este nome
+                  {view.research
+                    ? `: ${view.research.sources.filter((s) => s.exposure?.match === 'declared_identity').length} fonte(s) atribuída(s) até agora.`
+                    : '.'}
+                </p>
+              </section>
             )}
             <div className="analysis-grid">
               <section className="panel">
@@ -908,25 +1051,62 @@ export function Workspace() {
                   Selecione apenas termos públicos. Sua decisão vale para até duas rodadas dentro
                   deste escopo; sem confirmação repetida por reformulação.
                 </p>
-                {view.analysis.seeds.map((s) => (
-                  <label className="seed check" key={s.id}>
-                    <input
-                      type="checkbox"
-                      checked={seeds.includes(s.id)}
-                      onChange={(e) =>
-                        setSeeds((old) =>
-                          e.target.checked ? [...old, s.id] : old.filter((id) => id !== s.id),
-                        )
-                      }
-                    />
-                    <span>
-                      <strong>{s.text}</strong>
-                      <small>
-                        {s.purpose} · evidências: {s.evidenceIds.join(', ')}
-                      </small>
-                    </span>
-                  </label>
-                ))}
+                {view.identity && <h3 className="seed-group">Sinais públicos da foto</h3>}
+                {view.analysis.seeds
+                  .filter((s) => !isIdentitySeed(s))
+                  .map((s) => (
+                    <label className="seed check" key={s.id}>
+                      <input
+                        type="checkbox"
+                        checked={seeds.includes(s.id)}
+                        onChange={(e) =>
+                          setSeeds((old) =>
+                            e.target.checked ? [...old, s.id] : old.filter((id) => id !== s.id),
+                          )
+                        }
+                      />
+                      <span>
+                        <strong>{s.text}</strong>
+                        <small>
+                          {s.purpose} · evidências: {s.evidenceIds.join(', ')}
+                        </small>
+                      </span>
+                    </label>
+                  ))}
+                {view.identity && (
+                  <>
+                    <h3 className="seed-group">Identidade autorizada</h3>
+                    <p>
+                      Estas buscas partem do nome declarado, combinado à profissão e às atividades,
+                      e cruzam a identidade com os sinais da foto liberados acima. Elas mostram o
+                      que um desconhecido encontraria com a foto e o nome. Ficam fora: buscadores de
+                      pessoas, processos, vazamentos, endereço, telefone pessoal, familiares e
+                      rotina.
+                    </p>
+                    {view.analysis.seeds.filter(isIdentitySeed).map((s) => (
+                      <label className="seed check identity" key={s.id}>
+                        <input
+                          type="checkbox"
+                          checked={seeds.includes(s.id)}
+                          onChange={(e) =>
+                            setSeeds((old) =>
+                              e.target.checked ? [...old, s.id] : old.filter((id) => id !== s.id),
+                            )
+                          }
+                        />
+                        <span>
+                          <strong>{s.text}</strong>
+                          <small>
+                            {s.classification === 'declared_identity'
+                              ? 'Nome e profissão declarados'
+                              : 'Nome e atividade declarados'}{' '}
+                            · evidências: {s.evidenceIds.join(', ')}
+                          </small>
+                        </span>
+                      </label>
+                    ))}
+                  </>
+                )}
                 <label className="field">
                   Restringir a domínios públicos, opcional
                   <input
@@ -964,6 +1144,19 @@ export function Workspace() {
                     </span>
                     <h4>{s.title}</h4>
                     <p>{s.excerpt}</p>
+                    {s.exposure && (
+                      <p className="muted">
+                        <span className="tag exposure">
+                          {categoryLabels[s.exposure.category]} ·{' '}
+                          {s.exposure.match === 'declared_identity'
+                            ? 'atribuída à identidade'
+                            : 'possível homônimo'}
+                        </span>{' '}
+                        Dados visíveis:{' '}
+                        {s.exposure.dataClasses.map((d) => dataClassLabels[d]).join(', ') ||
+                          'não registrados'}
+                      </p>
+                    )}
                     {s.retrievalState !== 'fixture' && safeUrl(s.url) ? (
                       <a href={s.url} target="_blank" rel="noreferrer noopener">
                         Abrir fonte →
@@ -1068,6 +1261,15 @@ function ReportPanel({ report, onChange }: { report: Report; onChange: (r: Repor
       </p>
       <h3>2. Resumo de exposição</h3>
       <p>{report.summary}</p>
+      {report.scope.identity && report.identity.state === 'executed' && (
+        <p className="identity-callout">
+          Partindo da foto e da identidade autorizada de{' '}
+          <strong>{report.scope.identity.name}</strong>, a busca limitada encontrou{' '}
+          {report.identity.attributedSources.length} fonte(s) atribuída(s) em{' '}
+          {report.identity.categories.length} categoria(s). Amplitude observada:{' '}
+          <strong>{breadthLabels[report.identity.breadth]}</strong>. Detalhes na seção 5.1.
+        </p>
+      )}
       <p className="muted">
         Este documento inclui valores presentes na foto e no arquivo. Revise antes de compartilhar.
         Nomes transcritos não identificam pessoas pelo rosto; GPS e datas não comprovam localização
@@ -1118,6 +1320,7 @@ function ReportPanel({ report, onChange }: { report: Report; onChange: (r: Repor
           Nenhuma fonte executada/validada. Isso não demonstra ausência de exposição.
         </p>
       )}
+      <IdentitySection report={report} />
       <h3>6. Achados e correlações</h3>
       {report.findings.map((f) => (
         <article className="finding" key={f.id}>
@@ -1224,8 +1427,100 @@ function ReportPanel({ report, onChange }: { report: Report; onChange: (r: Repor
               Have I Been Pwned: verificação pelo próprio titular
             </a>
           </li>
+          <li>
+            Buscadores de pessoas e agregadores de dados: procure seu nome manualmente e use o canal
+            de remoção de cada serviço. A aplicação não os consulta.
+          </li>
         </ul>
       </details>
     </section>
+  );
+}
+
+function IdentitySection({ report }: { report: Report }) {
+  const identity = report.scope.identity;
+  const x = report.identity;
+  const seedText = (id: string) => report.research.seeds.find((s) => s.id === id)?.text ?? id;
+  const traced = report.research.sources.filter((s) => s.exposure);
+  return (
+    <>
+      <h4 className="subsection">5.1 Exposição da identidade autorizada</h4>
+      {!identity ? (
+        <p className="muted">{x.breadthReason}</p>
+      ) : (
+        <>
+          <p>
+            <strong>{identity.name}</strong> ({relationLabels[identity.relation]})
+            {identity.profession && ` · ${identity.profession}`}
+            {identity.activities.length > 0 && ` · ${identity.activities.join('; ')}`}. Declarada
+            pelo autor; não identificada pelo rosto. Estado: {x.state}.
+          </p>
+          <div className={'breadth breadth-' + x.breadth}>
+            <span>AMPLITUDE OBSERVADA</span>
+            <strong>{breadthLabels[x.breadth]}</strong>
+          </div>
+          <p>{x.breadthReason}</p>
+          {x.categories.length > 0 && (
+            <>
+              <p>
+                <strong>Onde a identidade aparece</strong>
+              </p>
+              <ul className="chips" aria-label="Categorias de exposição">
+                {x.categories.map((c) => (
+                  <li key={c.category}>
+                    {categoryLabels[c.category]} · {c.sourceIds.join(', ')}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+          {x.dataClasses.length > 0 && (
+            <>
+              <p>
+                <strong>Dados alcançáveis a partir da foto e da identidade</strong>
+              </p>
+              <ul className="chips" aria-label="Classes de dados expostos">
+                {x.dataClasses.map((d) => (
+                  <li key={d.dataClass}>
+                    {dataClassLabels[d.dataClass]} · {d.sourceIds.join(', ')}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+          {traced.length > 0 && (
+            <>
+              <p>
+                <strong>Do ponto de partida aos dados</strong>
+              </p>
+              <ol className="trail">
+                {traced.map((s) => (
+                  <li key={s.id}>
+                    <span className="tag">{s.id}</span> {seedText(s.seedId)}
+                    <span className="arrow" aria-hidden="true">
+                      →
+                    </span>
+                    {s.title}
+                    <span className="arrow" aria-hidden="true">
+                      →
+                    </span>
+                    {s.exposure!.dataClasses.map((d) => dataClassLabels[d]).join(', ') ||
+                      'sem classes registradas'}
+                    {s.exposure!.match === 'possible_homonym' && (
+                      <small>Possível homônimo; fora da contagem.</small>
+                    )}
+                  </li>
+                ))}
+              </ol>
+            </>
+          )}
+          <ul>
+            {x.limitations.map((l, i) => (
+              <li key={i}>{l}</li>
+            ))}
+          </ul>
+        </>
+      )}
+    </>
   );
 }

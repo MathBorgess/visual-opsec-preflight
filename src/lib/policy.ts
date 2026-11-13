@@ -1,21 +1,76 @@
 import {
   AppError,
+  isIdentitySeed,
   type AnalysisData,
   type FindingData,
   type ResearchData,
+  type SeedData,
   type SourceData,
 } from './contracts';
 
+// Phone numbers with area/country code, or Brazilian mobile numbers. Year
+// ranges such as 2025-2026 deliberately do not match.
+const phone = /(?:\+\d{1,3}[\s.-]?)?\(?\b\d{2}\)?[\s.-]?9?\d{4}[\s.-]\d{4}\b|\b9\d{4}-\d{4}\b/g;
+const address =
+  /\b(?:Rua|Avenida|Av\.|Travessa|Alameda|Rodovia|Estrada)\s+[^,;\n]{2,60}?,?\s*(?:n[º°o.]?\s*)?\d{1,5}\b/giu;
 const sensitive =
   /(?:[\w.+-]+@[\w.-]+\.[a-z]{2,}|\b(?:sk-|ghp_|AKIA|Bearer\s)[\w-]{8,}|\b\d{3}\.\d{3}\.\d{3}-\d{2}\b|\b\d{11,}\b|(?:latitude|longitude|password|senha|token|api.?key)\s*[:=]|-?\d{1,3}\.\d{4,}\s*[,;]\s*-?\d{1,3}\.\d{4,})/i;
 export function isSensitive(value: string) {
-  return sensitive.test(value);
+  return sensitive.test(value) || new RegExp(phone.source).test(value);
 }
 export function minimize(value: string) {
   return maskCredentials(value)
     .replace(/[\w.+-]+@[\w.-]+\.[a-z]{2,}/gi, '[e-mail omitido]')
     .replace(/\b\d{3}\.\d{3}\.\d{3}-\d{2}\b|\b\d{11,}\b/g, '[documento omitido]')
-    .replace(/-?\d{1,3}\.\d{4,}\s*[,;]\s*-?\d{1,3}\.\d{4,}/g, '[coordenadas omitidas]');
+    .replace(/-?\d{1,3}\.\d{4,}\s*[,;]\s*-?\d{1,3}\.\d{4,}/g, '[coordenadas omitidas]')
+    .replace(phone, '[telefone omitido]')
+    .replace(address, '[endereço omitido]')
+    .replace(/\b\d{5}-\d{3}\b/g, '[CEP omitido]');
+}
+// People-search/data brokers, face search engines, leak indexes and legal
+// record aggregators. The research prompt forbids them first; this short,
+// non-exhaustive list is a deterministic second barrier on reported sources.
+export const EXCLUDED_SOURCE_HOSTS = [
+  'spokeo.com',
+  'whitepages.com',
+  'pipl.com',
+  'beenverified.com',
+  'radaris.com',
+  'mylife.com',
+  'peoplefinders.com',
+  'intelius.com',
+  'truepeoplesearch.com',
+  'fastpeoplesearch.com',
+  'thatsthem.com',
+  'peekyou.com',
+  'instantcheckmate.com',
+  'truthfinder.com',
+  'ussearch.com',
+  'zabasearch.com',
+  'familytreenow.com',
+  'clustrmaps.com',
+  'nuwber.com',
+  'socialcatfish.com',
+  'pimeyes.com',
+  'facecheck.id',
+  'search4faces.com',
+  'findclone.ru',
+  'escavador.com',
+  'jusbrasil.com.br',
+  'consultasocio.com',
+  'tudosobretodos.se',
+  'dehashed.com',
+  'intelx.io',
+  'leakcheck.io',
+  'snusbase.com',
+] as const;
+export function excludedSource(url: string) {
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    return EXCLUDED_SOURCE_HOSTS.some((d) => host === d || host.endsWith('.' + d));
+  } catch {
+    return false;
+  }
 }
 export function maskCredentials(value: string) {
   return value
@@ -65,9 +120,15 @@ export function safeUrl(value: string, fixture = false): string | null {
     return null;
   }
 }
-export function approveSeeds(analysis: AnalysisData, ids: string[], domains: string[]) {
+export function approveSeeds(
+  analysis: AnalysisData,
+  ids: string[],
+  domains: string[],
+  // Seeds the backend derived from the identity declared at case creation.
+  declaredSeeds: SeedData[] = [],
+) {
   const unique = [...new Set(ids)];
-  if (unique.length > 12 || domains.length > 20)
+  if (unique.length > 16 || domains.length > 20)
     throw new AppError('INVALID_SELECTION', 'Seleção excede o limite.');
   const seeds = unique.map((id) => analysis.seeds.find((s) => s.id === id));
   if (
@@ -75,9 +136,13 @@ export function approveSeeds(analysis: AnalysisData, ids: string[], domains: str
       (s) =>
         !s ||
         isSensitive(s.text) ||
-        s.evidenceIds.some(
-          (id) => analysis.evidence.find((e) => e.id === id)?.sensitivity !== 'public',
-        ),
+        (isIdentitySeed(s)
+          ? !declaredSeeds.some(
+              (d) => d.id === s.id && d.text === s.text && d.classification === s.classification,
+            )
+          : s.evidenceIds.some(
+              (id) => analysis.evidence.find((e) => e.id === id)?.sensitivity !== 'public',
+            )),
     )
   )
     throw new AppError('SENSITIVE_QUERY', 'Termo não elegível para pesquisa pública.');
@@ -88,10 +153,20 @@ export function approveSeeds(analysis: AnalysisData, ids: string[], domains: str
     );
   return seeds as AnalysisData['seeds'];
 }
+const identityLimits =
+  'Registre em exposure a categoria da fonte e as classes de dados visíveis, sem copiar contato, endereço, documento ou agenda no trecho. Indique homônimos. Não use buscadores de pessoas, agregadores de processos ou vazamentos; não colete endereço residencial, telefone pessoal, documentos, familiares, relacionamentos, rotina, localização atual nem atributos sensíveis; não pivote para outras pessoas.';
+export const crossIdentityPurpose =
+  'Com identidade autorizada: verificar se fontes públicas deste sinal da foto mencionam a identidade declarada (programação, equipe, autoria), mostrando como foto e identidade se reforçam. Uma menção não comprova presença, vínculo atual, localização ou rotina.';
 export function publicResearchPurpose(
   classification: AnalysisData['seeds'][number]['classification'],
 ) {
   const purposes = {
+    declared_identity:
+      'Medir a exposição pública da identidade declarada: procurar o nome com a profissão declarada em páginas institucionais, perfis profissionais/acadêmicos públicos, publicações, notícias e perfis públicos. ' +
+      identityLimits,
+    declared_activity:
+      'Verificar se a atividade declarada aparece publicamente associada ao nome: eventos, projetos, grupos, competições, publicações ou portfólios. ' +
+      identityLimits,
     public_event:
       'Confirmar nome, edição, organizador e contexto público do evento; procurar alternativas, sem atribuir presença ou rotina a pessoas.',
     public_organization:
@@ -115,7 +190,33 @@ export function validateResearch(
 ) {
   const known = new Set(analysis.evidence.map((e) => e.id));
   const sourceIds = new Set<string>();
+  const excluded = new Set(result.sources.filter((s) => excludedSource(s.url)).map((s) => s.id));
+  if (excluded.size) {
+    result.sources = result.sources.filter((s) => !excluded.has(s.id));
+    result.findings = result.findings.filter((f) => !f.evidenceIds.some((id) => excluded.has(id)));
+    result.limitations = [
+      ...result.limitations.slice(0, 11),
+      `${excluded.size} fonte(s) de buscador de pessoas, agregador de dados ou vazamento descartada(s) com os achados dependentes; esses serviços ficam fora da coleta automática.`,
+    ];
+  }
+  const seedOf = (id: string) => analysis.seeds.find((seed) => seed.id === id);
+  const identityApproved = approvedIds.some((id) => {
+    const seed = seedOf(id);
+    return !!seed && isIdentitySeed(seed);
+  });
   for (const s of result.sources) {
+    const seed = seedOf(s.seedId);
+    // Identity exposure is classified only under an approved declared identity.
+    // An unclassified identity source counts conservatively as a possible homonym.
+    if (seed && isIdentitySeed(seed))
+      s.exposure = s.exposure
+        ? { ...s.exposure, dataClasses: [...new Set(s.exposure.dataClasses)] }
+        : { category: 'other', dataClasses: [], match: 'possible_homonym' };
+    else
+      s.exposure =
+        identityApproved && s.exposure
+          ? { ...s.exposure, dataClasses: [...new Set(s.exposure.dataClasses)] }
+          : null;
     const url = safeUrl(s.url, mode === 'demo');
     if (!url || !approvedIds.includes(s.seedId) || sourceIds.has(s.id) || known.has(s.id))
       throw new AppError('INVALID_SOURCE', 'Fonte sem vínculo ou URL válida.', 502);

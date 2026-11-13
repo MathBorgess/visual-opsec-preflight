@@ -31,7 +31,9 @@ Entregar um documento de exposição virtual que responda: “O que esta foto e 
 | RF-19 | Explicar encerramento e fontes | Dossiê registra motivo de parada, cobertura, pendências e estado remoto; fontes manuais não são apresentadas como consultadas automaticamente |
 | RF-20 | Preservar valores fornecidos | Transcrição em `verbatimText` exige região visual; `providedValue` contém GPS/autoria/data de campos suportados. Interface, JSON e Markdown mostram origem e limitações; credenciais continuam mascaradas |
 | RF-21 | Priorizar exploração proativa | Agente inventaria sinais diversos, propõe até cinco perguntas com ganho esperado e explora recortes/contexto público; controlador mantém três recortes, duas rodadas e 180 segundos de trabalho ativo |
-| RF-22 | Distinguir contexto profissional e pessoal | Nome/cargo legível é transcrição, sem atribuição a rosto. Pesquisa contextualiza organizações, eventos, locais públicos e produtos; não procura perfis individuais nem infere residência, rotina ou deslocamentos |
+| RF-22 | Distinguir contexto profissional e pessoal | Nome/cargo legível é transcrição, sem atribuição a rosto. Pesquisa contextualiza organizações, eventos, locais públicos e produtos; não procura perfis de pessoas não declaradas nem infere residência, rotina ou deslocamentos |
+| RF-23 | Pesquisar identidade autorizada | Opcional na criação: nome, profissão e até três atividades, com relação declarada (titular ou pessoa que autorizou) e consentimento próprio, separado do consentimento da foto. Campos com e-mail, telefone, documento ou link são recusados antes da IA. O backend deriva as sementes `PID*` e as evidências `UID*`; o modelo não pode propor sementes de identidade. O autor pode excluí-las na revisão; sem liberação, o nome não sai para a busca |
+| RF-24 | Medir a exposição da identidade | Fontes da identidade registram categoria, classes de dados visíveis e atribuição (`declared_identity` ou `possible_homonym`). O dossiê (seção 5.1) mostra onde a identidade aparece, que dados ficam alcançáveis, a cadeia semente → fonte → dados e uma amplitude observada com critério declarado; homônimos ficam fora da contagem e ausência de fonte não vira baixa exposição |
 
 ## Requisitos não funcionais
 
@@ -48,6 +50,7 @@ Entregar um documento de exposição virtual que responda: “O que esta foto e 
 | RNF-09 | Ser utilizável | Upload, progresso, evidência e exportação por teclado, labels claros e texto de estado acessível |
 | RNF-10 | Manter alegações honestas | Nenhuma promessa de exaustividade, identidade, residência, segurança certificada ou precisão não medida |
 | RNF-11 | Distinguir garantias e instruções | Testes comprovam controles externos ao modelo; prompt e auditoria posterior não são anunciados como bloqueio de cada consulta interna |
+| RNF-12 | Limitar a trilha de identidade | Sem reconhecimento facial nem busca reversa; buscadores de pessoas, agregadores de processos e bases de vazamentos são proibidos no prompt e descartados por lista determinística curta; telefones, endereços e CEP são mascarados nas apresentações; familiares, colegas e homônimos não viram alvos |
 
 ## Escopo que será implementado
 

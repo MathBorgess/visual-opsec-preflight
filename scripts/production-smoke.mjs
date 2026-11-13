@@ -113,7 +113,7 @@ try {
     } else if (view.phase === 'completed') {
       if (
         !view.report ||
-        view.report.version !== 'exposure-report/1.0' ||
+        view.report.version !== 'exposure-report/1.1' ||
         !view.report.visual.some((e) => e.kind === 'visual') ||
         !webVerified
       )
