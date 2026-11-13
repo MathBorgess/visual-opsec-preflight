@@ -1,50 +1,44 @@
 # visual-opsec-preflight
 
-Auditoria de privacidade visual antes da postagem, com núcleo local e pesquisa web agêntica opcional. Primeiro projeto de uma série de aprendizado público sobre cybersecurity e purple team.
+Uma foto como ponto de entrada para uma curadoria educativa de exposição virtual: o que aparece nos pixels, o que o arquivo registra e o que fontes públicas permitem correlacionar.
 
-> **Estado: arquitetura inicial, não uma ferramenta funcional.** Este repositório contém o desenho do MVP, a extensão de pesquisa agêntica e os critérios para validar sua implementação. Nenhuma taxa de acerto, latência ou localização foi demonstrada.
+> **Estado: desenho de produto e arquitetura, sem implementação.** Não há aplicação, deploy, credencial provisionada, análise executada ou resultado de qualidade/latência demonstrado.
 
-## Problema
+## Direção da primeira versão
 
-Uma foto pode expor textos, telas, crachás e metadados que passam despercebidos. A proposta é ajudar seu autor a revisar esses sinais e exportar uma cópia com menor exposição, sem prometer anonimato ou uma “foto segura”.
+Aplicação web na Vercel, com backend em Vercel Functions e integração direta com **OpenAI Agents API + web search nativo**. A capacidade multimodal do modelo faz a análise da foto; GPT Image não é necessário para isso.
 
-## MVP proposto
+O produto ajuda o autor a entender quanto uma foto pode revelar sobre seu ambiente e contexto. Cada conclusão distingue observação, correlação sustentada, hipótese e desconhecido. “Todo o conteúdo disponível” é uma direção de exploração, sem promessa de exaustividade.
 
-1. Importar uma imagem JPEG/PNG própria ou autorizada, com limites de tamanho e pixels.
-2. Inventariar metadados sem registrá-los em logs.
-3. Executar OCR local para sugerir regiões de revisão; VLM é extensão futura e opcional.
-4. Apresentar evidência, caixa delimitadora e incerteza de cada candidato.
-5. Permitir aprovação, descarte ou criação manual de regiões.
-6. Exportar nova imagem com redação opaca/corte e sem copiar metadados do original.
-7. Verificar novamente o arquivo exportado, mostrando limites e risco residual.
+Premissa de desenho: primeira versão privada para uso do autor e preparação de demonstrações. Abrir a outras pessoas exige identidade, isolamento de casos e cotas persistentes.
 
-Processamento local por padrão. O MVP offline não faz upload, telemetria, scraping, consulta geográfica ou identificação de pessoas. Modelos e pesos locais, quando necessários, terão download explícito e execução posterior offline.
+## Jornada proposta
 
-## Extensão proposta: agente de pesquisa de exposição
+1. Selecionar uma única foto JPEG/PNG própria ou autorizada e revisar o envio para processamento remoto.
+2. Inventariar metadados antes de criar uma derivada orientada, sem metadados embutidos.
+3. Analisar a foto pela Agents API e explorar até três regiões da mesma imagem.
+4. Revisar os sinais públicos liberados à pesquisa; consultas compatíveis avançam sem confirmação repetida.
+5. Enriquecer os achados por web search em sessão separada, sem foto ou inventário privado.
+6. Ler o documento de exposição virtual com evidências, fontes, contradições, limites e recomendações.
+7. Exportar o documento e encerrar o caso, com estado explícito da exclusão das sessões remotas.
 
-O ponto de entrada continua sendo uma imagem própria ou autorizada e seus metadados. Um agente colhe observações iniciais com ferramentas locais, pede explorações adicionais de regiões e usa principalmente web search para contextualizar sinais em fontes públicas. O resultado é um documento de exposição com evidências, fontes, contradições, recomendações e lacunas.
+A chave `OPENAI_API_KEY` será uma variável **Secret** do projeto Vercel, acessível ao backend. Nenhum valor será colocado no repositório, navegador ou contexto do agente.
 
-O modo conectado é opcional e separado do offline. Uma política por caso define quais dados podem ir à OpenAI e quais termos podem chegar à busca web, além do orçamento de pesquisa. Dentro desse escopo, o agente avança sem pedir autorização a cada consulta; mudanças de escopo exigem revisão. A imagem original e valores sensíveis não são enviados por padrão. Pesquisa textual a partir de sinais extraídos não equivale a busca reversa da imagem.
+## Documentos do desenho
 
-Integrações OpenAI propostas: Agents API para o agente; Responses API com web search no adaptador de pesquisa; visão para explorar recortes autorizados; chat para revisão; GPT-Live para conversa por voz durante a investigação; GPT Image para material sintético e ilustrações claramente identificadas. Serviços remotos não são processamento offline. Ainda não há integração implementada ou acesso de API verificado.
+- [Arquitetura e implantação proposta](docs/architecture.md)
+- [Requisitos funcionais e critérios de aceite](docs/requirements.md)
+- [Agente, exploração e pesquisa web](docs/agent-research.md)
+- [OpenAI e armazenamento da secret](docs/openai-integration.md)
+- [Contrato do documento de exposição virtual](docs/exposure-report.md)
+- [Exemplo sintético do documento](docs/examples/exposure-report.synthetic.md)
+- [Plano de avaliação](docs/evaluation.md)
+- [Roteiro educativo](docs/video.md)
 
-## Arquitetura e próximos passos
+## Escopo e histórico
 
-- [Arquitetura e decisões](docs/architecture.md)
-- [Agente de pesquisa e documento de exposição](docs/agent-research.md)
-- [Integrações OpenAI e fronteiras de dados](docs/openai-integration.md)
-- [Ameaças, privacidade e avaliação](docs/evaluation.md)
-- [Roteiro de demonstração](docs/video.md)
-- [Contrato inicial de achados](schemas/finding.schema.json)
+O desenho de 2026-11-13 substitui a proposta anterior de CLI offline em Python/Tesseract e a lista ampla de integrações OpenAI. A V1 prioriza análise e dossiê; sanitização/exportação de uma nova foto ficam para evolução posterior. O [schema inicial de candidatos visuais](schemas/finding.schema.json) permanece como referência histórica e não é o contrato completo do novo dossiê.
 
-Primeiro marco: importar uma fixture sintética, normalizar orientação, exportar uma cópia sem metadados e verificar o resultado. OCR, interface, modelos, sanitização e pesquisa agêntica ainda **não estão implementados**.
+Fotos e documentos de terceiros exigem autorização. O projeto não faz reconhecimento facial, identificação de desconhecidos, inferência de residência/rotina ou classificação de atributos pessoais sensíveis. As demonstrações usam dados fictícios; o dossiê não certifica segurança nem constitui prova de identidade, presença ou localização atual.
 
-## Uso responsável
-
-Use apenas imagens próprias ou com consentimento específico. Não publique imagens, nomes, endereços, identificadores ou registros de consentimento de terceiros neste repositório. As demonstrações devem usar dados fictícios; consentimento para analisar não equivale a consentimento para publicar.
-
-Não há geolocalização exata de pessoas, reconhecimento facial, inferência de residência/rotina ou busca de alvos. O sistema auxilia revisão humana e não certifica segurança. Texto encontrado na imagem, metadados e conteúdo web são dados não confiáveis, nunca instruções para o agente. Contextualizar um evento ou organização em fontes públicas não comprova vínculo de uma pessoa com eles.
-
-## Verificação deste bootstrap
-
-A sintaxe do contrato JSON foi validada. Ainda não existem código executável, testes de produto, CI, benchmark ou implantação. A ausência de licença escolhida não concede automaticamente direitos de reutilização.
+Nenhum segredo, foto pessoal ou dossiê privado deve ser versionado. Licença de reutilização ainda não foi escolhida.

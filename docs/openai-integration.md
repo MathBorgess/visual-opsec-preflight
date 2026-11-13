@@ -1,60 +1,63 @@
-# Integração OpenAI (proposta)
+# OpenAI e armazenamento da secret
 
-Direção de arquitetura em 2026-11-12, baseada na documentação pública consultada nesta data. Não há código, credencial criada, sessão, acesso de API, custo ou benchmark verificado. IDs de modelos, disponibilidade e parâmetros precisam ser confirmados antes da implementação; selecionar por capacidade e avaliação do projeto.
+Desenho em 2026-11-13. Define onde a credencial ficará e como será usada; nenhuma chave é criada, lida, copiada ou solicitada nesta etapa.
 
-## Divisão de responsabilidades
+## Integração escolhida
 
-| Recurso | Papel proposto no Visual OpSec | Dados enviados |
-| --- | --- | --- |
-| Agents API | Sessão do agente de pesquisa, progresso e chamadas das ferramentas da aplicação | Projeção `E_model` autorizada, nunca inventário privado inteiro por padrão |
-| Responses API + `web_search` | Adaptador isolado para pesquisa pública e retorno de fontes | Plano de busca e projeção `E_web` |
-| Modelo com visão | Interpretar uma região e sugerir explorações complementares ao Tesseract | Recorte autorizado, reencodificado sem metadados |
-| Chat de revisão | Explicar achados e receber ajustes de escopo/regiões | Contexto permitido pela política; edição local pode funcionar sem nuvem |
-| GPT-Live | Conversa por voz enquanto o backend pesquisa | Áudio/contexto autorizado; resultados minimizados |
-| GPT Image | Criar cenários fictícios para demonstração e ilustrações educativas | Prompts sintéticos; sem originais privados por padrão |
+Usar apenas **Agents API e seu web search nativo**. A capacidade multimodal do modelo recebe a imagem; não é necessário GPT Image para analisá-la. Não haverá integração separada com Responses API, Chat Completions, Agents SDK, GPT-Live, Realtime, MCP ou sandbox na V1.
 
-OCR, inventário, política, transformações de coordenadas, máscaras, exportação e verificação permanecem em Python local. Um único agente coordena o trabalho; os adaptadores não precisam ser agentes independentes.
+A [Agents API](https://developers.openai.com/api/docs/guides/agents-api/overview) gerencia sessões. O [contrato de criação](https://developers.openai.com/api/reference/resources/beta/subresources/agents/subresources/sessions/methods/create) admite `input_image` e `environment.type = none`. Usar derivada inline/data URL dentro dos limites, sem hospedar foto em URL pública.
 
-## Agente e execução
+O [web search nativo](https://developers.openai.com/api/docs/guides/agents-api/tools/web-search) pode ser habilitado em modo `live`, com domínios permitidos. Omitir essa ferramenta nas sessões visual e de síntese; habilitá-la apenas na sessão de pesquisa. Não copiar parâmetros de web search da Responses API: os contratos são distintos.
 
-A [Agents API](https://developers.openai.com/api/docs/guides/agents-api/overview) oferece sessões e orquestração gerenciadas. Para esta aplicação com arquivos locais e ferramentas restritas, propor `environment.type = none`: o agente pede funções ao controlador, sem sandbox de comandos. Essa opção é descrita no [quickstart](https://developers.openai.com/api/docs/guides/agents-api/quickstart).
+Um modelo configurável deve suportar as capacidades escolhidas e estar disponível no projeto. Validar acesso/SDK na implementação. O [quickstart](https://developers.openai.com/api/docs/guides/agents-api/quickstart) documenta as permissões de Agents e inferência; uma permissão de inferência chamada `api.responses.write` não implica adicionar uma integração separada à Responses API.
 
-Sandbox `openai_hosted` é alternativa futura para execução remota expressamente escolhida; não migrar fotos para ele automaticamente. Self-hosted também não significa que a inferência é offline.
+## Decisão: Secret do projeto Vercel
 
-O controlador atende chamadas tipadas, aplica política antes de retornar dados à sessão e salva IDs/estados para retomada. Streams servem à interface; desconectar a interface não deve ser tratado como cancelamento do trabalho. Finalizar somente após verificar estado do turno e das ferramentas.
+A opção recomendada para esta V1 é o armazenamento nativo de variáveis do projeto, com **tipo Secret**, usando o nome **`OPENAI_API_KEY`**.
 
-Agents SDK é alternativa se o projeto optar por controlar o loop na aplicação; não é sinônimo de Agents API nem dependência obrigatória dela. Antes de implementar, confirmar acesso e versões do SDK pela documentação, sem inventar métodos ou misturar contratos.
+Local planejado: **Vercel Dashboard → projeto visual-opsec-preflight → Settings → Environment Variables → OPENAI_API_KEY → Secret → Production**. O nome/projeto efetivo será confirmado na implantação.
 
-## Pesquisa pública isolada
+As [variáveis Vercel são criptografadas em repouso](https://vercel.com/docs/environment-variables). O tipo [Secret](https://vercel.com/changelog/environment-variables-now-use-config-and-secret-types) oculta o valor de leitura posterior no painel, mantendo-o disponível ao deployment. O código do servidor ainda consegue lê-lo; Secret não torna a chave inacessível a código/dependências comprometidos.
 
-Propor função `research_web(search_plan_id)` no agente principal. O serviço resolve somente o plano autorizado e faz uma chamada separada à Responses API com `web_search`. Não habilitar busca irrestrita no mesmo contexto que contém dados privados.
+É o cofre de credenciais suficiente para este desenho, sem adicionar HashiCorp Vault, AWS Secrets Manager ou outro serviço. Não equivale a um vault dedicado com todas as funções de auditoria, rotação dinâmica e credenciais temporárias. Os vaults da Agents API destinam-se a credenciais que ferramentas usam; a chave que autentica nossa aplicação fica na Vercel, fora do contexto do agente.
 
-A [documentação de web search](https://developers.openai.com/api/docs/guides/tools-web-search) descreve citações, lista de fontes e filtros de domínio. Preservar referências estruturadas do retorno e vínculos com o plano; URL citada não equivale a evidência suficiente para toda frase. Uma nova integração deve usar o contrato atual de `web_search`, sem copiar exemplos legados de preview.
+## Fluxo da chave
 
-Respostas hospedadas podem envolver reformulações e navegação internas. Validar controles disponíveis no endpoint/modelo escolhido; não supor que o controlador intercepta cada busca. O adaptador recebe somente dados já liberados para o contexto público. Se for necessário aprovar literalmente cada consulta ou cada destino de rede e a API não oferecer isso, esse perfil exige outro adaptador compatível ou pesquisa manual.
+```mermaid
+flowchart LR
+  O[Responsável cadastra a chave no projeto] --> S[Vercel Secret: OPENAI_API_KEY]
+  S --> F[Function: módulo server-only]
+  F -->|header Authorization via HTTPS| A[OpenAI Agents API]
+```
 
-Filtros de domínio ajudam a restringir fontes, mas não substituem a política de dados nem garantem corroboração. Falhas e fontes indisponíveis voltam como limitações; não gerar URLs ou resultados fictícios.
+O módulo de integração lê a variável durante execução no servidor e a usa somente na autenticação do cliente HTTP/SDK oficial. A plataforma também pode disponibilizar variáveis ao build; o projeto não executa análise nem chamadas OpenAI durante build, geração estática ou preview de interface.
 
-## Visão e GPT Image
+Não colocar o valor em `NEXT_PUBLIC_*`, código React cliente, HTML, localStorage, cookies, arquivo público, GitHub, prompts, instruções, ferramentas, respostas de erro ou logs. Não transmitir `process.env` inteiro. A UI de configuração pode informar “integração disponível/indisponível”, nunca retornar o valor.
 
-[Visão](https://developers.openai.com/api/docs/guides/images-vision) analisa entradas de imagem. Usá-la para contexto, como “esta região parece uma etiqueta?”, com saída estruturada e incerteza. Para cobertura de máscaras, usar caixas locais e revisão humana; não confiar em coordenadas aproximadas do modelo como prova de cobertura.
+## Separação de ambientes
 
-[GPT Image](https://developers.openai.com/api/docs/guides/image-generation) gera/edita imagens. Pode criar uma mesa fictícia para demonstrar exposição, mas qualquer conteúdo gerado deve ser marcado como sintético. Etiquetas e gabaritos de teste devem ser inseridos/controlados deterministicamente; texto gerado não é um ground truth confiável por si só.
+| Ambiente | Destino planejado |
+| --- | --- |
+| Production | `OPENAI_API_KEY` como Secret com chave exclusiva do projeto/ambiente de produção |
+| Preview | Sem chave por padrão; uma chave distinta e limitada somente para preview revisado e protegido |
+| Development | Chave separada em `.env.local` ignorado pelo Git quando a implementação exigir testes locais |
+| Repositório | Somente documentação e futuro `.env.example` com valores vazios |
 
-Não reconstruir conteúdo ilegível para tratá-lo como evidência. Não usar inpainting ou “limpeza” generativa como padrão de remoção segura. Original, derivados de análise, cópia sanitizada e material sintético mantêm identidades distintas.
+Não presumir que Secret de Production/Preview pode ser baixada para uso local. Permissões de chave devem ser mínimas para Agents e inferência, com escopo de projeto e controles de uso. Preview de PR não confiável não recebe credenciais de produção.
 
-## Chat, GPT-Live e Realtime
+`CASE_SIGNING_SECRET` será uma segunda Secret, aleatória e independente, para assinar a cookie de referência do caso. Ela não autentica chamadas OpenAI. Variáveis como `OPENAI_MODEL` e limites da aplicação são Config, sem conteúdo sensível.
 
-“Chat” descreve a interface de revisão; não obriga uso de Chat Completions. Para este desenho, a conversa pode continuar a sessão do agente, mostrando evidências e controles de revisão.
+## Cadastro e rotação previstos
 
-[GPT-Live](https://developers.openai.com/api/docs/guides/live) permite conversa por voz enquanto um backend delegado trabalha. Propor client delegation para conectar o mesmo controlador do caso: o usuário pode dizer “explore a etiqueta” ou pedir o progresso enquanto a pesquisa continua. A instrução passa pela política vigente; fala transcrita não amplia permissões automaticamente.
+Somente na etapa futura de implementação/implantação: o responsável informa o valor diretamente no painel/fluxo seguro do projeto correto, sem colá-lo no chat ou em comandos registrados. Nenhum segredo precisa existir para revisar estes documentos.
 
-A [Realtime API](https://developers.openai.com/api/docs/guides/realtime) é outra opção para interação de voz e ferramentas. GPT-Live e Realtime não são nomes intercambiáveis. A escolha da interface de voz pode esperar o fluxo textual funcionar.
+Para rotação: criar credencial substituta com mesmo escopo → atualizar Secret → gerar novo deployment → validar o deployment novo → revogar a chave anterior. Mudanças de variáveis só chegam a novos deployments; deployments antigos precisam ser considerados e não devem servir como rollback com chave revogada.
 
-Áudio adiciona um novo destino de dados: desativado por padrão e autorizado separadamente. Captura contínua de câmera/vídeo não está incluída; compartilhamento de uma imagem não autoriza transmitir a câmera. Manter chave de projeto no backend confiável; autenticação efêmera no cliente quando suportada pelo fluxo escolhido.
+Suspeita de exposição: revogar a chave comprometida imediatamente, substituir e revisar uso. Não aguardar uma rotação sem indisponibilidade nesse cenário. Recriar/validar deployments de rollback conforme necessário.
 
-## Dados, operação e entrega
+Acesso ao painel e ao repositório deve ser restrito ao responsável. Logs recebem IDs de requisição, códigos e métricas; filtram headers de autenticação, payloads, cookies e mensagens de erro que possam conter dados. Ausência de chave ou acesso negado produz erro de configuração sanitizado; nunca uma integração falsa.
 
-Separar autorização para nuvem/modelo, busca web e áudio; informar os dados de cada um antes de ativar o modo. Não anunciar análise local/offline quando qualquer chamada remota estiver habilitada. Configurar retenção, histórico e tracing conforme o contrato do serviço; não prometer retenção zero sem verificação.
+## O que ainda precisa de verificação prática
 
-Primeira integração: coleta local → projeção autorizada → agente → pesquisa isolada → documento com fontes verificadas. Depois acrescentar visão de recortes, chat e voz conforme ganho medido. GPT Image fica no ramo de demonstração. Critérios de custo, cancelamento, privacidade e fidelidade das citações estão em [Avaliação](evaluation.md) e no [contrato do agente](agent-research.md).
+Disponibilidade e custo do modelo, acesso à Agents API, limites de imagem inline, comportamento das citações/itens de busca, cancelamento/exclusão de sessões e configuração efetiva de proteção e secrets da Vercel. São verificações futuras, não resultados desta etapa. Não há promessa de retenção zero nos provedores.
