@@ -52,7 +52,7 @@ Metadados podem ser editados; GPS registrado não comprova localização atual; 
 
 ## Exposição da identidade autorizada (5.1)
 
-Só existe conteúdo quando o autor declarou uma identidade com autorização; caso contrário a subseção registra `not_requested`. Estados: `not_requested`, `not_authorized` (nenhuma semente de identidade liberada), `not_executed`, `executed` e `failed`.
+Todo caso novo declara uma identidade sob a autorização de identificação, e suas sementes entram em cada pesquisa. Estados: `executed`, `not_executed` (pesquisa não iniciada, por exemplo por orçamento), `failed`; `not_requested` e `not_authorized` permanecem apenas para casos anteriores à identificação obrigatória.
 
 | Campo | Significado |
 | --- | --- |

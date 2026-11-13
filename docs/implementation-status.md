@@ -34,7 +34,7 @@
 | RF-13/14, RNF-03/08 | Cancelamento pendente permanece pendente; exclusão recusada mantém referência; criação sem ID não anuncia exclusão remota |
 | RF-16, RNF-01/04/07 | Origem, acesso loopback local, HMAC, expiração, erros sanitizados e no-store; proteção Vercel/secret real pendentes |
 | RNF-06 | Schemas rejeitam ferramentas injetadas na saída; configuração não é montada a partir do conteúdo; React escapa texto e Markdown escapa marcação |
-| RF-23/24, RNF-12 | `tests/identity.test.ts` e `tests/api.test.ts` cobrem consentimento separado, campos recusados, sementes derivadas no backend, recusa de semente de identidade vinda do modelo, payload web sem foto/contexto, descarte de buscador de pessoas, homônimos fora da contagem e critério de amplitude; `e2e/identity.spec.ts` percorre a jornada até a seção 5.1 e o Markdown |
+| RF-02/23/24, RNF-12 | `tests/identity.test.ts` e `tests/api.test.ts` cobrem as autorizações obrigatórias de ambiente e identificação, nome obrigatório, campos recusados, inclusão automática das buscas da identidade, compatibilidade de casos anteriores, sementes derivadas no backend, recusa de semente de identidade vinda do modelo, payload web sem foto/contexto, descarte de buscador de pessoas, homônimos fora da contagem e critério de amplitude; `e2e/identity.spec.ts` percorre a jornada até a seção 5.1 e o Markdown |
 
 ## Limites conhecidos
 
@@ -44,7 +44,7 @@ A heurística de ganho compara evidências/perguntas e conteúdo/estados da pesq
 
 O limite de 180s considera turnos concluídos e tempo pendente observado por polling. A espera do autor na revisão não conta. O controlador para novas explorações e pode iniciar síntese; exclusão é separada. Sem banco, concorrência/replay não oferecem orçamento global rígido.
 
-Verificação local: TypeScript sem erros, 88 testes passando e onze cenários Playwright sobre o build de produção, incluindo a jornada com identidade autorizada. As regressões cobrem caixas decimais e números preservados em dossiês completos/parciais, minimização de textos nos downloads, escolha de perguntas elegíveis e reconciliação das sementes após recortes/atualizações. Os testes de seleção controlam as respostas do caso; a jornada usa a API real no modo demo e injeta uma caixa decimal no relatório retornado para verificar também a exportação do navegador. Inspeção do bundle estático não encontrou os nomes das secrets do servidor, a credencial fictícia do teste ou o marcador de contexto privado das fixtures. Isso não substitui a verificação com a configuração real.
+Verificação local: TypeScript sem erros, 90 testes passando e onze cenários Playwright sobre o build de produção; todas as jornadas declaram identidade e concedem as duas autorizações. As regressões cobrem caixas decimais e números preservados em dossiês completos/parciais, minimização de textos nos downloads, escolha de perguntas elegíveis e reconciliação das sementes após recortes/atualizações. Os testes de seleção controlam as respostas do caso; a jornada usa a API real no modo demo e injeta uma caixa decimal no relatório retornado para verificar também a exportação do navegador. Inspeção do bundle estático não encontrou os nomes das secrets do servidor, a credencial fictícia do teste ou o marcador de contexto privado das fixtures. Isso não substitui a verificação com a configuração real.
 
 Para reproduzir: `npm run check` e, após o build, `OPSEC_E2E_PRODUCTION=1 npm run test:e2e`. Capturas sintéticas ficam em `artifacts/` e traces em `test-results/`, ambos ignorados pelo Git.
 

@@ -62,15 +62,21 @@ describe('identidade declarada com autorização', () => {
       activities: ['palestrante em eventos', 'corrida de rua'],
       authorizedAt: at,
     });
-    expect(parseIdentityForm({}, at)).toBeNull();
+    expect(code(() => parseIdentityForm({}, at))).toBe('IDENTITY_REQUIRED');
     expect(readDeclaredIdentity(identity)).toEqual(identity);
+  });
+  it('aceita a identidade fictícia usada pelos scripts de verificação ao vivo', () => {
+    const fixture = { name: 'Personagem Sintetica Opsec', profession: 'fixture de teste' };
+    expect(parseIdentityForm({ ...fixture, relation: 'self', consent: 'yes' }, at)).toMatchObject(
+      fixture,
+    );
   });
   it('exige consentimento próprio e recusa contatos, documentos e excesso', () => {
     expect(code(() => parseIdentityForm({ ...fields, consent: 'no' }, at))).toBe(
       'IDENTITY_CONSENT_REQUIRED',
     );
     expect(code(() => parseIdentityForm({ profession: 'engenheira' }, at))).toBe(
-      'IDENTITY_INVALID',
+      'IDENTITY_REQUIRED',
     );
     for (const patch of [
       { name: 'ana@example.org' },

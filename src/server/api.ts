@@ -147,13 +147,14 @@ export function createApi(
         if (!(file instanceof File) || form.get('consent') !== 'yes')
           throw new AppError(
             'CONSENT_REQUIRED',
-            'Selecione uma foto própria/autorizada e confirme o processamento.',
+            'Selecione uma foto própria/autorizada e confirme a autorização de ambiente.',
           );
         const context = String(form.get('context') ?? '');
         if (context.length > 600)
           throw new AppError('CONTEXT_SIZE', 'Use até 600 caracteres de contexto opcional.');
         const authorizedAt = new Date(now()).toISOString();
-        // Optional authorized identity: validated before any image or provider work.
+        // Identification is part of every case: it has its own authorization and
+        // is validated before any image or provider work.
         const declaredIdentity = parseIdentityForm(
           {
             name: form.get('identityName'),
@@ -477,12 +478,15 @@ export function createApi(
             await synthesize(start, m, loaded);
           } else {
             const domains = (action.domains ?? []).map((s) => s.toLowerCase().trim());
-            const seeds = approveSeeds(
-              loaded.analysis,
-              action.seedIds ?? [],
-              domains,
-              identitySeeds(loaded.identity),
-            ).map((s) => ({
+            // The identification authorization granted at creation already covers
+            // the declared identity: its seeds join every research round. The
+            // author selects only which photo signals accompany them.
+            const declared = identitySeeds(loaded.identity);
+            const requested = [
+              ...(action.seedIds ?? []).filter((id) => !declared.some((d) => d.id === id)),
+              ...declared.map((d) => d.id),
+            ];
+            const seeds = approveSeeds(loaded.analysis, requested, domains, declared).map((s) => ({
               ...s,
               purpose: publicResearchPurpose(s.classification),
             }));

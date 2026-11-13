@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import type { CaseView } from '../src/lib/contracts';
+import { authorizations, declareIdentity } from './case-entry';
 
 test('jornada local: fixture → exploração → sementes → pesquisa → revisão e download → encerramento', async ({
   page,
@@ -27,9 +28,11 @@ test('jornada local: fixture → exploração → sementes → pesquisa → revi
   await page.screenshot({ path: 'artifacts/home-desktop.png', fullPage: true });
   await page.getByRole('button', { name: 'Usar imagem sintética de exemplo' }).click();
   await expect(page.getByText(/cenario-sintetico.jpg/)).toBeVisible();
-  const consent = page.getByRole('checkbox', { name: /Esta foto é própria/ });
-  await consent.focus();
-  await page.keyboard.press('Space');
+  await declareIdentity(page);
+  for (const name of authorizations) {
+    await page.getByRole('checkbox', { name }).focus();
+    await page.keyboard.press('Space');
+  }
   await page.getByRole('button', { name: 'Iniciar simulação' }).click();
   await expect(
     page.getByRole('heading', { name: 'Quais sinais podem ser pesquisados?' }),

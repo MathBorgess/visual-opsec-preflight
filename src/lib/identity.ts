@@ -15,10 +15,11 @@ import {
 } from './contracts';
 import { isSensitive, publicResearchPurpose } from './policy';
 
-// Authorized identity track: the author declares who appears in the photo
-// (themselves or someone who explicitly authorized it). The application never
-// infers identity from a face; it measures what public sources associate with
-// the declared name, profession and activities, for an educational review.
+// Authorized identity track, part of every new case: the author declares who
+// appears in the photo (themselves or someone who explicitly authorized it) and
+// grants two authorizations, environment and identification. The application
+// never infers identity from a face; it measures what public sources associate
+// with the declared name, profession and activities, for an educational review.
 
 export const relationLabels: Record<DeclaredIdentityData['relation'], string> = {
   self: 'titular',
@@ -96,7 +97,7 @@ function checkQualifier(value: string, label: string) {
     );
 }
 
-/** Parses the optional identity fields of the case form. */
+/** Parses the identity fields of the case form; identification is required. */
 export function parseIdentityForm(
   fields: {
     name?: unknown;
@@ -106,22 +107,22 @@ export function parseIdentityForm(
     consent?: unknown;
   },
   authorizedAt: string,
-): DeclaredIdentityData | null {
+): DeclaredIdentityData {
   const name = tidy(fields.name);
   const profession = tidy(fields.profession);
   const activities = String(fields.activities ?? '')
     .split(/[\n;]+/)
     .map(tidy)
     .filter(Boolean);
-  if (!name) {
-    if (profession || activities.length)
-      invalid('Informe o nome da pessoa para pesquisar profissão e atividades declaradas.');
-    return null;
-  }
+  if (!name)
+    throw new AppError(
+      'IDENTITY_REQUIRED',
+      'Informe o nome de quem aparece na foto: a identificação faz parte da análise de exposição.',
+    );
   if (fields.consent !== 'yes')
     throw new AppError(
       'IDENTITY_CONSENT_REQUIRED',
-      'Confirme que a identidade é sua ou que a pessoa autorizou expressamente a pesquisa educativa.',
+      'Confirme a autorização de identificação: a identidade é sua ou a pessoa autorizou expressamente a pesquisa educativa.',
     );
   if (fields.relation !== 'self' && fields.relation !== 'authorized')
     invalid('Indique se a identidade é sua ou de alguém que autorizou a pesquisa.');

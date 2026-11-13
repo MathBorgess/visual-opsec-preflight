@@ -12,13 +12,13 @@ Não identificar desconhecidos por rosto, inferir residência/rotina, fazer rast
 
 ## Identidade autorizada
 
-Para mostrar quanto uma foto e uma identidade revelam juntas, o autor pode declarar nome, profissão e até três atividades de quem aparece na foto: a própria identidade ou a de alguém que autorizou expressamente a pesquisa educativa. A identidade é contexto fornecido (`UID*`, `user_context`), nunca reconhecida pelo rosto.
+Para mostrar quanto uma foto e uma identidade revelam juntas, todo caso declara nome, profissão e até três atividades de quem aparece na foto: a própria identidade ou a de alguém que autorizou expressamente a pesquisa educativa. A identidade é contexto fornecido (`UID*`, `user_context`), nunca reconhecida pelo rosto.
 
 | Passo | Controle |
 | --- | --- |
-| Criação | Consentimento separado; campos sem e-mail, telefone, documento ou link; validação no navegador e no backend antes de qualquer chamada |
+| Criação | Autorizações obrigatórias de ambiente e de identificação; nome obrigatório; campos sem e-mail, telefone, documento ou link; validação no navegador e no backend antes de qualquer chamada |
 | Análise visual | Recebe `declaredIdentity` e pode apontar quando texto/objetos da foto coincidem com a identidade; não pode propor sementes de identidade (`IDENTITY_SEED_FROM_MODEL`) |
-| Revisão | O backend deriva `PID1` (`"nome" profissão`) e `PID2..` (`"nome" atividade`); o autor libera ou exclui cada uma |
+| Revisão | O backend deriva `PID1` (`"nome" profissão`) e `PID2..` (`"nome" atividade`); elas aparecem fixas e entram em toda pesquisa pela autorização de identificação, enquanto o autor escolhe os sinais da foto |
 | Pesquisa | Sessão web recebe somente as sementes liberadas, `identityScope` e perguntas de cruzamento escritas pelo backend para os sinais da foto liberados; sem foto, contexto ou inventário |
 | Validação | Fontes de agregadores excluídos são descartadas com achados dependentes; fonte de identidade sem classificação conta como possível homônimo |
 | Síntese e dossiê | `identityExposure`, calculado de forma determinística, orienta o resumo e a seção 5.1 |
@@ -49,7 +49,7 @@ Se a foto deixou de estar disponível no navegador, pedir a seleção do mesmo a
 
 ## Política do caso
 
-Antes da primeira análise, informar: cópia da foto transita pela Vercel, uma derivada será enviada à OpenAI, metadados selecionados acompanharão o caso e sinais liberados podem ser usados em buscas. O autor informa que a foto é própria/autorizada.
+Antes da primeira análise, informar: cópia da foto transita pela Vercel, uma derivada será enviada à OpenAI, metadados selecionados acompanharão o caso e sinais liberados podem ser usados em buscas. O autor concede duas autorizações: ambiente (a foto é própria/autorizada e pode ter imagem, cenário e metadados analisados) e identificação (a identidade declarada é sua ou de quem autorizou, e pode ser pesquisada em fontes públicas sem a foto).
 
 Antes da pesquisa, apresentar sementes propostas, pergunta e contexto. O autor pode excluir termos e domínios e liberar o conjunto uma vez. Reformulações dentro desse escopo não pedem autorização repetida; novos dados privados não são acrescentados automaticamente.
 

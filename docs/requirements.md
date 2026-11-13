@@ -11,12 +11,12 @@ Entregar um documento de exposição virtual que responda: “O que esta foto e 
 | ID | Comportamento | Critério de aceite |
 | --- | --- | --- |
 | RF-01 | Criar caso com uma foto própria/autorizada | Aceita JPEG/PNG estático dentro dos limites; rejeita formato, animação, arquivo corrompido ou excesso antes de chamar IA |
-| RF-02 | Explicitar processamento remoto | Autor vê destinos e classes de dados e registra autorização do caso; contexto opcional não é pré-requisito para iniciar |
+| RF-02 | Explicitar processamento remoto e autorizar | Autor vê destinos e classes de dados e registra duas autorizações obrigatórias: **ambiente** (foto, cenário e metadados, com derivada enviada à OpenAI) e **identificação** (pesquisa pública da identidade declarada, sem a foto). Sem ambas, nada é enviado; contexto opcional não é pré-requisito |
 | RF-03 | Inventariar metadados | Mostra grupos/campos suportados e estado da extração; distingue ausente, presente e falha; não usa data de upload como data de captura |
 | RF-04 | Normalizar a imagem | Orientação visual correta, derivada sem metadados copiados e vínculo ao original; original preservado no dispositivo |
 | RF-05 | Analisar com Agents API | Produz observações e limitações ancoradas na foto/contexto; leitura visual não é apresentada como OCR validado |
 | RF-06 | Explorar regiões da mesma foto | Até três recortes válidos, solicitados pelo agente e vinculados ao original; usuário também pode apontar uma região dentro do limite |
-| RF-07 | Revisar sementes públicas | Autor pode aprovar/excluir termos e domínios antes da rodada web; decisão aparece no escopo do dossiê |
+| RF-07 | Revisar sementes públicas | Autor pode aprovar/excluir sinais da foto e domínios antes da rodada web; as buscas da identidade aparecem fixas, cobertas pela autorização de identificação; decisão aparece no escopo do dossiê |
 | RF-08 | Enriquecer com web search nativo | Até duas rodadas na sessão separada; somente dados autorizados, fontes e estados reais; sem buscar se nenhum termo for liberado |
 | RF-09 | Manter proveniência | Cada achado aponta a evidências existentes; inferência externa liga sinal inicial, semente, rodada e fonte |
 | RF-10 | Produzir o dossiê | Todas as seções do contrato aparecem, inclusive vazias com motivo; distingue observação, corroboração, hipótese, conflito e desconhecido |
@@ -32,7 +32,7 @@ Entregar um documento de exposição virtual que responda: “O que esta foto e 
 | RF-20 | Preservar valores fornecidos | Transcrição em `verbatimText` exige região visual; `providedValue` contém GPS/autoria/data de campos suportados. Interface, JSON e Markdown mostram origem e limitações; credenciais continuam mascaradas |
 | RF-21 | Priorizar exploração proativa | Agente inventaria sinais diversos, propõe até cinco perguntas com ganho esperado e explora recortes/contexto público; controlador mantém três recortes, duas rodadas e 180 segundos de trabalho ativo |
 | RF-22 | Distinguir contexto profissional e pessoal | Nome/cargo legível é transcrição, sem atribuição a rosto. Pesquisa contextualiza organizações, eventos, locais públicos e produtos; não procura perfis de pessoas não declaradas nem infere residência, rotina ou deslocamentos |
-| RF-23 | Pesquisar identidade autorizada | Opcional na criação: nome, profissão e até três atividades, com relação declarada (titular ou pessoa que autorizou) e consentimento próprio, separado do consentimento da foto. Campos com e-mail, telefone, documento ou link são recusados antes da IA. O backend deriva as sementes `PID*` e as evidências `UID*`; o modelo não pode propor sementes de identidade. O autor pode excluí-las na revisão; sem liberação, o nome não sai para a busca |
+| RF-23 | Pesquisar identidade autorizada no fluxo principal | Obrigatório na criação: nome, profissão e até três atividades opcionais, com relação declarada (titular ou pessoa que autorizou) e autorização de identificação. Campos com e-mail, telefone, documento ou link são recusados antes da IA (`IDENTITY_REQUIRED`, `IDENTITY_CONSENT_REQUIRED`, `IDENTITY_INVALID`). O backend deriva as sementes `PID*` e as evidências `UID*`, e inclui todas as `PID*` em cada pesquisa; o modelo não pode propor sementes de identidade e o cliente não pode inventá-las |
 | RF-24 | Medir a exposição da identidade | Fontes da identidade registram categoria, classes de dados visíveis e atribuição (`declared_identity` ou `possible_homonym`). O dossiê (seção 5.1) mostra onde a identidade aparece, que dados ficam alcançáveis, a cadeia semente → fonte → dados e uma amplitude observada com critério declarado; homônimos ficam fora da contagem e ausência de fonte não vira baixa exposição |
 
 ## Requisitos não funcionais

@@ -54,6 +54,14 @@ function form(bytes, crop) {
   body.set('image', new Blob([bytes], { type: 'image/jpeg' }), 'synthetic.jpg');
   body.set('consent', 'yes');
   if (crop) body.set('regionId', crop);
+  else {
+    // Fictional identity: the case requires identification, and a name that
+    // matches no real person keeps the live check free of personal data.
+    body.set('identityName', 'Personagem Sintetica Opsec');
+    body.set('identityProfession', 'fixture de teste');
+    body.set('identityRelation', 'self');
+    body.set('identityConsent', 'yes');
+  }
   return body;
 }
 try {

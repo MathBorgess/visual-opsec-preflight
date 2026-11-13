@@ -45,9 +45,9 @@ HIBP e similares não são catálogos completos de todos os vazamentos. Não enc
 
 | ID | Informação desejada | Fonte | Uso e limite |
 | --- | --- | --- | --- |
-| SRC-12 | Quanto a identidade declarada aparece publicamente | Páginas institucionais, perfis profissionais/acadêmicos públicos, publicações, programações de eventos, imprensa, portfólios e perfis públicos em redes, via web search nativo | Somente com nome, profissão e atividades declarados pelo titular ou por pessoa que autorizou expressamente, e liberados na revisão. Registra categoria e classes de dados, sem copiar contato, endereço, documento ou agenda. Homônimos são marcados e não contam |
+| SRC-12 | Quanto a identidade declarada aparece publicamente | Páginas institucionais, perfis profissionais/acadêmicos públicos, publicações, programações de eventos, imprensa, portfólios e perfis públicos em redes, via web search nativo | Somente com nome, profissão e atividades declarados pelo titular ou por pessoa que autorizou expressamente, sob a autorização de identificação do caso. Registra categoria e classes de dados, sem copiar contato, endereço, documento ou agenda. Homônimos são marcados e não contam |
 
-A autorização da foto não se estende à identidade: ela tem consentimento próprio e relação declarada. A trilha não descobre quem está na foto, não usa o rosto e não amplia para familiares, colegas, contatos ou homônimos. O controlador descarta fontes de uma lista curta e não exaustiva de buscadores de pessoas, agregadores de processos e bases de vazamentos (`EXCLUDED_SOURCE_HOSTS` em `src/lib/policy.ts`); a instrução ao modelo continua sendo a primeira barreira.
+A autorização de ambiente não se estende à identidade: a identificação tem autorização própria, obrigatória em todo caso, e relação declarada. A trilha não descobre quem está na foto, não usa o rosto e não amplia para familiares, colegas, contatos ou homônimos. O controlador descarta fontes de uma lista curta e não exaustiva de buscadores de pessoas, agregadores de processos e bases de vazamentos (`EXCLUDED_SOURCE_HOSTS` em `src/lib/policy.ts`); a instrução ao modelo continua sendo a primeira barreira.
 
 ## Fontes e ações excluídas
 

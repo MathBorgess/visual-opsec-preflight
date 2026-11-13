@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 
-test('jornada com identidade autorizada: foto + nome → exposição medida no dossiê', async ({
+test('fluxo principal com identidade: foto + nome + autorizações → exposição no dossiê', async ({
   page,
 }) => {
   const errors: string[] = [];
@@ -17,11 +17,17 @@ test('jornada com identidade autorizada: foto + nome → exposição medida no d
   await page
     .getByRole('textbox', { name: /^Atividades/ })
     .fill('palestrante em eventos\ncorrida de rua');
-  await page.getByRole('checkbox', { name: /Esta foto é própria/ }).check();
   const start = page.getByRole('button', { name: 'Iniciar simulação' });
-  // The identity needs its own authorization, separate from the photo consent.
+  // Both authorizations are required: environment and identification.
+  await page.getByRole('checkbox', { name: /^Ambiente\./ }).check();
   await expect(start).toBeDisabled();
-  await page.getByRole('checkbox', { name: /Declaro que esta identidade é minha/ }).check();
+  await page.getByRole('checkbox', { name: /^Identificação\./ }).check();
+  await expect(start).toBeEnabled();
+  await page.getByRole('textbox', { name: 'Nome usado publicamente', exact: true }).fill('');
+  await expect(start).toBeDisabled();
+  await page
+    .getByRole('textbox', { name: 'Nome usado publicamente', exact: true })
+    .fill('Ana Exemplo');
   await page.screenshot({ path: 'artifacts/identity-entry-desktop.png', fullPage: true });
   await start.click();
   await expect(
@@ -31,9 +37,11 @@ test('jornada com identidade autorizada: foto + nome → exposição medida no d
   await expect(
     page.getByRole('heading', { name: 'Identidade autorizada', exact: true }),
   ).toBeVisible();
-  await expect(
-    page.getByRole('checkbox', { name: /"Ana Exemplo" professora de física/ }),
-  ).toBeChecked();
+  // Identity searches come from the identification authorization, not from a checkbox.
+  await expect(page.getByRole('list', { name: 'Buscas da identidade autorizada' })).toContainText(
+    '"Ana Exemplo" corrida de rua',
+  );
+  await expect(page.getByRole('checkbox', { name: /"Ana Exemplo"/ })).toHaveCount(0);
   await expect(page.getByRole('checkbox', { name: /Encontro Aurora/ })).toBeChecked();
   await page.screenshot({ path: 'artifacts/identity-review-desktop.png', fullPage: true });
   await page.getByRole('button', { name: 'Autorizar sinais e pesquisar' }).click();
