@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { LIMITS, type CaseView } from '../src/lib/contracts';
+import { prepareCase } from './case-entry';
 
 function scenario(): CaseView {
   return {
@@ -15,6 +16,7 @@ function scenario(): CaseView {
       metadata: [],
       limitations: [],
     },
+    identity: null,
     analysis: {
       evidence: [
         {
@@ -105,7 +107,7 @@ async function controlledCase(page: Page, view: CaseView, refine?: (v: CaseView)
 async function start(page: Page) {
   await page.goto('/');
   await page.getByRole('button', { name: 'Usar imagem sintética de exemplo' }).click();
-  await page.getByRole('checkbox', { name: /Esta foto é própria/ }).check();
+  await prepareCase(page);
   await page.getByRole('button', { name: 'Iniciar simulação' }).click();
 }
 

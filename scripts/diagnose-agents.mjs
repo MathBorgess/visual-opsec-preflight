@@ -146,6 +146,11 @@ if (process.env.OPSEC_PROBE_FULL_CASE === '1') {
     const form = new FormData();
     form.set('image', new Blob([bytes], { type: 'image/jpeg' }), 'synthetic.jpg');
     form.set('consent', 'yes');
+    // Fictional identity required by every case; it matches no real person.
+    form.set('identityName', 'Personagem Sintetica Opsec');
+    form.set('identityProfession', 'fixture de teste');
+    form.set('identityRelation', 'self');
+    form.set('identityConsent', 'yes');
     const handler = require('../.next/server/app/api/cases/route.js').routeModule.userland.POST;
     const response = await handler(
       new Request(origin + '/api/cases', {

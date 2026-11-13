@@ -8,9 +8,13 @@ import {
   Box,
   AppError,
   LIMITS,
+  EXPOSED_DATA,
+  EXPOSURE_CATEGORIES,
+  isIdentitySeed,
   validateAnalysis,
   type AnalysisData,
   type CaseView,
+  type DeclaredIdentityData,
   type InitialContext,
   type Manifest,
   type ResearchData,
@@ -24,7 +28,19 @@ import {
   presentEvidence,
   publicResearchPurpose,
   curateVerifiedResearch,
+  crossIdentityPurpose,
+  excludedSource,
+  minimize,
 } from '@/lib/policy';
+import {
+  attachIdentity,
+  identityExposure,
+  identitySeeds,
+  parseIdentityForm,
+  readDeclaredIdentity,
+  withIdentityEvidence,
+  withoutIdentitySeeds,
+} from '@/lib/identity';
 import { buildReport } from '@/lib/report';
 import { processImage } from './image';
 import { guard, readManifest, jsonResponse, imageForm, boundedBody } from './security';
@@ -77,6 +93,7 @@ function selectProvider(): AgentsProvider {
   );
 }
 type Loaded = {
+  identity: DeclaredIdentityData | null;
   verificationIssue?: AppError;
   verificationUrls: string[];
   failure?: AppError;
@@ -130,17 +147,31 @@ export function createApi(
         if (!(file instanceof File) || form.get('consent') !== 'yes')
           throw new AppError(
             'CONSENT_REQUIRED',
-            'Selecione uma foto própria/autorizada e confirme o processamento.',
+            'Selecione uma foto própria/autorizada e confirme a autorização de ambiente.',
           );
         const context = String(form.get('context') ?? '');
         if (context.length > 600)
           throw new AppError('CONTEXT_SIZE', 'Use até 600 caracteres de contexto opcional.');
+        const authorizedAt = new Date(now()).toISOString();
+        // Identification is part of every case: it has its own authorization and
+        // is validated before any image or provider work.
+        const declaredIdentity = parseIdentityForm(
+          {
+            name: form.get('identityName'),
+            profession: form.get('identityProfession'),
+            activities: form.get('identityActivities'),
+            relation: form.get('identityRelation'),
+            consent: form.get('identityConsent'),
+          },
+          authorizedAt,
+        );
         const image = await processImage(Buffer.from(await file.arrayBuffer()));
         const initial: InitialContext = {
           kind: 'analysis',
           image: image.info,
           context,
-          authorizedAt: new Date(now()).toISOString(),
+          authorizedAt,
+          declaredIdentity,
         };
         manifest = {
           version: 1,
@@ -169,7 +200,12 @@ export function createApi(
         };
         manifest.visualId = await start({
           stage: 'analysis',
-          data: { image: initial.image, context, authorizedAt: initial.authorizedAt },
+          data: {
+            image: initial.image,
+            context,
+            authorizedAt: initial.authorizedAt,
+            declaredIdentity,
+          },
           image: image.dataUrl,
           key: manifest.pendingKey,
         });
@@ -415,7 +451,7 @@ export function createApi(
           image: image.dataUrl,
           data: {
             request: { questionId, bbox: box, attempt: question.attempts + 1 },
-            previous: loaded.analysis,
+            previous: withoutIdentitySeeds(loaded.analysis),
             instructions:
               'Retorne análise cumulativa; incremente attempts da pergunta. Se continuar sem ganho, encerre-a como inconclusive.',
           },
@@ -442,7 +478,15 @@ export function createApi(
             await synthesize(start, m, loaded);
           } else {
             const domains = (action.domains ?? []).map((s) => s.toLowerCase().trim());
-            const seeds = approveSeeds(loaded.analysis, action.seedIds ?? [], domains).map((s) => ({
+            // The identification authorization granted at creation already covers
+            // the declared identity: its seeds join every research round. The
+            // author selects only which photo signals accompany them.
+            const declared = identitySeeds(loaded.identity);
+            const requested = [
+              ...(action.seedIds ?? []).filter((id) => !declared.some((d) => d.id === id)),
+              ...declared.map((d) => d.id),
+            ];
+            const seeds = approveSeeds(loaded.analysis, requested, domains, declared).map((s) => ({
               ...s,
               purpose: publicResearchPurpose(s.classification),
             }));
@@ -457,11 +501,7 @@ export function createApi(
               m.priorFingerprint = fingerprint(loaded.analysis, loaded.research);
               await submit(start, m, {
                 stage: 'research',
-                data: {
-                  seeds,
-                  questions: seeds.map((s) => ({ seedId: s.id, question: s.purpose })),
-                  round: m.rounds,
-                },
+                data: researchData(seeds, m.rounds, loaded.identity),
                 domains,
                 key: `${m.caseId}:research:${m.rounds}`,
               });
@@ -493,9 +533,7 @@ export function createApi(
             stage: 'research',
             sessionId: m.researchId,
             data: {
-              seeds,
-              questions: seeds.map((s) => ({ seedId: s.id, question: s.purpose })),
-              round: m.rounds,
+              ...researchData(seeds, m.rounds, loaded.identity),
               instruction: loaded.verificationUrls.length
                 ? 'As fontes da rodada anterior não foram aceitas. Abra exatamente os URLs de urlsToVerify usando web_search, confira o conteúdo e reconstrua Research com evidências efetivamente obtidas. Não apenas troque URLs mantendo trechos sem suporte. Use round atual; fonte inacessível fica unavailable. Não amplie sementes, domínios ou alvos.'
                 : 'Tente resolver alternativas pendentes sem ampliar sementes; preserve IDs de fontes anteriores.',
@@ -594,30 +632,34 @@ async function load(p: AgentsProvider, m: Manifest): Promise<Loaded> {
     !Array.isArray(initial.image.metadata)
   )
     throw new AppError('INVALID_CONTEXT', 'Contexto da sessão não corresponde ao caso.', 502);
+  const identity = readDeclaredIdentity(initial.declaredIdentity);
   let search: Snapshot | null = null,
     research: ResearchData | null = null,
     error: string | null = null;
   let failure = visual.failure;
   let verificationIssue: AppError | undefined;
   let verificationUrls: string[] = [];
-  let analysis: AnalysisData = {
-    ...empty,
-    evidence: initial.image.metadata
-      .filter((m) => m.state === 'present')
-      .map((m) => ({
-        id: m.id,
-        kind: 'metadata' as const,
-        description: m.field + ': ' + m.value,
-        sensitivity: m.private ? ('private' as const) : ('unknown' as const),
-        bbox: null,
-        limitation: 'Extração do arquivo; autenticidade não confirmada.',
-      })),
-  };
+  let analysis: AnalysisData = withIdentityEvidence(
+    {
+      ...empty,
+      evidence: initial.image.metadata
+        .filter((m) => m.state === 'present')
+        .map((m) => ({
+          id: m.id,
+          kind: 'metadata' as const,
+          description: m.field + ': ' + m.value,
+          sensitivity: m.private ? ('private' as const) : ('unknown' as const),
+          bbox: null,
+          limitation: 'Extração do arquivo; autenticidade não confirmada.',
+        })),
+    },
+    identity,
+  );
   let previous: AnalysisData | undefined;
   for (const output of visual.outputs) {
     if (record(output) && typeof output.summary === 'string') continue;
     try {
-      analysis = validateAnalysis(Analysis.parse(output), previous);
+      analysis = validateAnalysis(withIdentityEvidence(Analysis.parse(output), identity), previous);
       previous = analysis;
     } catch {
       error =
@@ -627,6 +669,8 @@ async function load(p: AgentsProvider, m: Manifest): Promise<Loaded> {
       break;
     }
   }
+  // Identity seeds come only from the declared identity, after model validation.
+  analysis = attachIdentity(analysis, identity);
   if (m.researchId && m.deletion[m.researchId] !== 'deleted') {
     try {
       search = await p.read(m.researchId);
@@ -703,7 +747,11 @@ async function load(p: AgentsProvider, m: Manifest): Promise<Loaded> {
           ...new Set(
             candidate.data.sources
               .map((s) => s.url)
-              .filter((url) => !search!.visitedUrls.some((v) => safeUrl(v) === safeUrl(url))),
+              .filter(
+                (url) =>
+                  !excludedSource(url) &&
+                  !search!.visitedUrls.some((v) => safeUrl(v) === safeUrl(url)),
+              ),
           ),
         ];
         verificationIssue = new AppError(issue.code, issue.message, issue.status, {
@@ -803,6 +851,7 @@ async function load(p: AgentsProvider, m: Manifest): Promise<Loaded> {
     logFailure(failure);
   }
   return {
+    identity,
     initial,
     analysis,
     research,
@@ -904,6 +953,37 @@ async function submit(start: AgentsProvider['start'], m: Manifest, req: Provider
     );
   }
 }
+function researchData(
+  seeds: AnalysisData['seeds'],
+  round: number,
+  identity: DeclaredIdentityData | null,
+) {
+  const declared = identity ? seeds.filter(isIdentitySeed) : [];
+  const questions = seeds.map((s) => ({ seedId: s.id, question: s.purpose }));
+  if (!declared.length) return { seeds, questions, round };
+  // Crossing approved photo signals with the declared identity shows how both
+  // reinforce each other. The backend writes the question; the model cannot widen it.
+  for (const s of seeds.filter((s) => !isIdentitySeed(s)))
+    questions.push({ seedId: s.id, question: crossIdentityPurpose });
+  return {
+    seeds,
+    questions,
+    round,
+    identityScope: {
+      relation: identity!.relation,
+      authorizedAt: identity!.authorizedAt,
+      declaredSeedIds: declared.map((s) => s.id),
+      objective:
+        'Mostrar, para fins educativos, quanto da identidade autorizada está exposto em fontes públicas e como ela se combina aos sinais aprovados da foto.',
+      exposureCategories: EXPOSURE_CATEGORIES,
+      exposedData: EXPOSED_DATA,
+      permittedSources:
+        'LinkedIn, Lattes, GitHub, perfis públicos em redes sociais, páginas institucionais, publicações, eventos, imprensa, e Escavador/Jusbrasil apenas para registrar menções ao nome declarado.',
+      outOfScope:
+        'Outras pessoas (familiares, colegas, coautores, partes de processos, demais pessoas da foto), homônimos como alvo, outros buscadores de pessoas, busca facial, vazamentos, número de processo, endereço residencial, telefone pessoal, documentos, rotina, localização atual e atributos sensíveis.',
+    },
+  };
+}
 async function synthesize(start: AgentsProvider['start'], m: Manifest, l: Loaded) {
   m.lastTurnId = l.visual.turnId;
   const findings = [...l.analysis.findings, ...(l.research?.findings ?? [])];
@@ -915,8 +995,22 @@ async function synthesize(start: AgentsProvider['start'], m: Manifest, l: Loaded
       research: l.research,
       findings,
       stopReason: m.stopReason,
+      ...(l.identity
+        ? {
+            identityExposure: identityExposure(
+              l.identity,
+              l.analysis.seeds,
+              l.research,
+              m.allowedSeedIds,
+              m.rounds,
+            ),
+          }
+        : {}),
       instruction:
-        'Sintetize sem buscar novamente. Não invente fontes nem promova hipótese. Preserve review=pending, correction="". questionResolutions encerra perguntas existentes com IDs de evidências válidos e motivo; só resolva se o critério de suficiência foi atendido. Registre inconclusive quando houve exploração sem resposta.',
+        'Sintetize sem buscar novamente. Não invente fontes nem promova hipótese. Preserve review=pending, correction="". questionResolutions encerra perguntas existentes com IDs de evidências válidos e motivo; só resolva se o critério de suficiência foi atendido. Registre inconclusive quando houve exploração sem resposta.' +
+        (l.identity
+          ? ' Há identidade autorizada: o summary explica, conforme identityExposure, quanto dela ficou exposto, como foto e identidade se reforçam e quais ações reduzem a exposição. Achados sobre ela usam category=identity. Não trate possível homônimo como fato nem infira residência, rotina, localização atual ou atributos sensíveis.'
+          : ''),
     },
     key: `${m.caseId}:synthesis`,
   });
@@ -927,7 +1021,7 @@ function view(m: Manifest, l: Loaded, model: string): CaseView {
   const report = terminal
     ? buildReport(
         m,
-        l.initial,
+        { ...l.initial, declaredIdentity: l.identity },
         l.analysis,
         l.research,
         l.synthesis,
@@ -948,12 +1042,22 @@ function view(m: Manifest, l: Loaded, model: string): CaseView {
     mode: m.provider,
     phase: m.phase,
     image,
+    identity: l.identity,
     analysis: {
       ...l.analysis,
       seeds: l.analysis.seeds.filter((s) => !isSensitive(s.text)),
       evidence: l.analysis.evidence.map(presentEvidence),
     },
-    research: l.research,
+    research: l.research && {
+      ...l.research,
+      sources: l.research.sources.map((s) => ({
+        ...s,
+        title: minimize(s.title),
+        excerpt: minimize(s.excerpt),
+        limitation: minimize(s.limitation),
+      })),
+      discovered: l.research.discovered?.map((d) => ({ ...d, value: minimize(d.value) })),
+    },
     report,
     limits: LIMITS,
     budget: { crops: m.crops, rounds: m.rounds, activeMs: m.activeMs, noGain: m.noGain },

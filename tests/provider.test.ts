@@ -172,6 +172,21 @@ describe('adaptador Agents API — SDK real com HTTP controlado', () => {
     ]);
     expect(JSON.stringify(calls[1].body)).not.toContain('PRIVATE_CONTEXT');
     expect(JSON.stringify(calls[1].body)).not.toContain('input_image');
+    // The visual agent cannot propose identity seeds; only the backend derives them.
+    expect(JSON.stringify(calls[0].body.agent.text.format.schema)).not.toContain(
+      'declared_identity',
+    );
+    expect(calls[0].body.agent.instructions).toContain('Não a confirme pelo rosto');
+    expect(calls[0].body.agent.instructions).toContain('nunca identificação');
+    expect(schema.properties.analysis.anyOf[0].required).toContain('subjects');
+    // Research sources always declare exposure under strict Structured Outputs.
+    const sourceSchema = calls[1].body.agent.text.format.schema.properties.sources.items;
+    expect(sourceSchema.required).toContain('exposure');
+    expect(calls[1].body.agent.text.format.schema.required).toContain('discovered');
+    expect(calls[1].body.agent.instructions).toContain('Seja proativo');
+    expect(calls[1].body.agent.instructions).toContain('declared_identity');
+    expect(calls[1].body.agent.instructions).toContain('Não pivote para familiares');
+    expect(calls[1].body.agent.instructions).toContain('Escavador e Jusbrasil são permitidos');
     expect(calls[2].url.pathname).toBe('/v1/agents/sessions/as_visual/events');
     expect(calls[2].body.events[0].type).toBe('agent.session.input.message');
     expect(calls[2].headers.get('Idempotency-Key')).toBe('synthesis-1');

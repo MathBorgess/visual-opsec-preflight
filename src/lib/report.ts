@@ -7,6 +7,14 @@ import {
   type ResearchData,
 } from './contracts';
 import { maskCredentials, minimize, presentEvidence } from './policy';
+import {
+  breadthLabels,
+  categoryLabels,
+  dataClassLabels,
+  facetLabels,
+  identityExposure,
+  relationLabels,
+} from './identity';
 
 export function minimizeReport(report: Report): Report {
   // Redact string values while JSON still knows their types. Rewriting the
@@ -55,8 +63,15 @@ export function buildReport(
   const unresolved = analysis.questions.filter((q) =>
     ['open', 'inconclusive', 'not_explored'].includes(q.status),
   );
+  const identity = initial.declaredIdentity ?? null;
+  const facesVisible = analysis.subjects?.facesVisible ?? null;
+  const exposure = identityExposure(identity, analysis.seeds, research, m.allowedSeedIds, m.rounds);
+  if (identity && facesVisible !== null && facesVisible > 1)
+    exposure.limitations.push(
+      `${facesVisible - 1} outra(s) pessoa(s) visível(is) na foto ficou(aram) fora da pesquisa por não ter(em) autorizado; considere desfocá-la(s) antes de compartilhar.`,
+    );
   const report: Report = {
-    version: 'exposure-report/1.0',
+    version: 'exposure-report/1.1',
     caseId: m.caseId,
     generatedAt: new Date().toISOString(),
     mode: m.provider,
@@ -67,8 +82,9 @@ export function buildReport(
           ? 'completed'
           : 'partial',
     scope: {
-      objective:
-        'Curadoria educativa de exposição virtual a partir de uma foto própria ou autorizada.',
+      objective: identity
+        ? 'Curadoria educativa de exposição virtual a partir de uma foto própria ou autorizada e da identidade declarada com autorização: o que foto e identidade, juntas, permitem encontrar em fontes públicas.'
+        : 'Curadoria educativa de exposição virtual a partir de uma foto própria ou autorizada.',
       authorizedAt: initial.authorizedAt,
       selectedSeeds: m.allowedSeedIds,
       image: {
@@ -76,6 +92,8 @@ export function buildReport(
         height: initial.image.height,
         format: initial.image.format,
       },
+      identity,
+      facesVisible,
     },
     summary:
       synthesis?.summary ??
@@ -93,6 +111,7 @@ export function buildReport(
       seeds: analysis.seeds.filter((s) => m.allowedSeedIds.includes(s.id)),
       sources,
     },
+    identity: exposure,
     findings: findings.map((f) =>
       f.evidenceIds.some((id) =>
         analysis.evidence.some((e) => e.id === id && e.sensitivity === 'private'),
@@ -152,11 +171,14 @@ export function buildReport(
     },
     method: {
       model,
-      promptVersion: '2',
+      promptVersion: '3',
       imageProcessor: 'Sharp + exifr; extração determinística e visão sujeita a erro',
       sourceCatalog: [
         'Foto e metadados',
         'Fontes públicas pertinentes via web search',
+        ...(identity
+          ? ['Identidade declarada pelo autor; pesquisada via web search somente se liberada']
+          : []),
         'Google/HIBP: orientação manual, sem consulta automática',
       ],
     },
@@ -164,8 +186,9 @@ export function buildReport(
   return minimizeReport(report);
 }
 
+const clean = (s: string) => s.replace(/[\r\n]+/g, ' ').replace(/([\\`*_{}\[\]<>|#!])/g, '\\$1');
+
 export function reportMarkdown(r: Report): string {
-  const clean = (s: string) => s.replace(/[\r\n]+/g, ' ').replace(/([\\`*_{}\[\]<>|#!])/g, '\\$1');
   const list = (items: string[]) =>
     items.length
       ? items.map((v) => '- ' + clean(v)).join('\n')
@@ -180,6 +203,9 @@ export function reportMarkdown(r: Report): string {
     'Estado: ' + r.status,
     'Gerado em: ' + r.generatedAt,
     clean(r.scope.objective),
+    'Rostos visíveis: ' +
+      (r.scope.facesVisible ?? 'não informado') +
+      '. Somente a pessoa autorizada é pesquisada; nenhum rosto é usado para identificar.',
     '## 2. Resumo de exposição',
     clean(r.summary),
     '## 3. O que a foto mostra',
@@ -201,9 +227,11 @@ export function reportMarkdown(r: Report): string {
     list(
       r.research.sources.map(
         (s) =>
-          `${s.id}: ${s.title}; semente ${s.seedId}; rodada ${s.round}; profundidade ${s.semanticDepth}; acesso ${s.accessedAt}; ${s.url}; ${s.retrievalState}; ${s.excerpt}; ${s.limitation}`,
+          `${s.id}: ${s.title}; semente ${s.seedId}; rodada ${s.round}; profundidade ${s.semanticDepth}; acesso ${s.accessedAt}; ${s.url}; ${s.retrievalState}; ${s.excerpt}; ${s.limitation}${s.exposure ? `; exposição: ${categoryLabels[s.exposure.category]} — ${s.exposure.dataClasses.map((d) => dataClassLabels[d]).join(', ') || 'sem classes registradas'} (${s.exposure.match === 'declared_identity' ? 'atribuída à identidade' : 'possível homônimo'})` : ''}`,
       ),
     ),
+    '### 5.1 Exposição da identidade autorizada',
+    ...identitySection(r),
     '## 6. Achados e correlações',
     ...r.findings.map(
       (f) =>
@@ -227,4 +255,31 @@ export function reportMarkdown(r: Report): string {
     JSON.stringify(r.coverage.deletion),
   ];
   return lines.join('\n\n') + '\n';
+}
+
+function identitySection(r: Report): string[] {
+  const id = r.scope.identity;
+  const x = r.identity;
+  if (!id) return [clean(x.breadthReason)];
+  const list = (items: string[]) =>
+    items.length ? items.map((v) => '- ' + clean(v)).join('\n') : '- Nenhum registro.';
+  return [
+    clean(
+      `Identidade declarada (${relationLabels[id.relation]}): ${id.name}${id.profession ? ' · ' + id.profession : ''}${id.activities.length ? ' · ' + id.activities.join('; ') : ''}. Fornecida pelo autor; não identificada pelo rosto.`,
+    ),
+    'Estado: ' + x.state,
+    clean(`Amplitude observada: ${breadthLabels[x.breadth]}. ${x.breadthReason}`),
+    'Sementes de identidade liberadas:',
+    list(x.seeds),
+    'O que a busca descobriu a partir do nome:',
+    list(
+      x.discovered.map((d) => `${facetLabels[d.facet]}: ${d.value} (${d.sourceIds.join(', ')})`),
+    ),
+    'Onde a identidade aparece:',
+    list(x.categories.map((c) => `${categoryLabels[c.category]}: ${c.sourceIds.join(', ')}`)),
+    'Dados alcançáveis a partir da foto e da identidade:',
+    list(x.dataClasses.map((d) => `${dataClassLabels[d.dataClass]}: ${d.sourceIds.join(', ')}`)),
+    'Limites da medição:',
+    list(x.limitations),
+  ];
 }

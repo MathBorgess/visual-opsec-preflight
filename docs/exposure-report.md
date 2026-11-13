@@ -1,6 +1,6 @@
 # Documento de exposição virtual
 
-Contrato de produto de 2026-11-13. A implementação local usa `exposure-report/1.0`, definido em `src/lib/contracts.ts`. O exemplo de desenho continua sintético e não é análise real. Ver [exemplo](examples/exposure-report.synthetic.md), [requisitos](requirements.md) e [evidências locais](implementation-status.md).
+Contrato de produto de 2026-11-13. A implementação local usa `exposure-report/1.1`, definido em `src/lib/contracts.ts`; a versão 1.1 acrescenta `scope.identity`, `identity` e `sources[].exposure`. O exemplo de desenho continua sintético e não é análise real. Ver [exemplo](examples/exposure-report.synthetic.md), [requisitos](requirements.md) e [evidências locais](implementation-status.md).
 
 ## Propósito
 
@@ -16,7 +16,7 @@ O documento é um material educativo de exposição, não prova pericial, confir
 | 2. Resumo de exposição | Principais achados sustentados, limite mais importante e contexto que continua desconhecido; sem score global |
 | 3. O que a foto mostra | Inventário de regiões/textos/objetos, leitura e limitações; separar informações fornecidas pelo usuário |
 | 4. O que o arquivo registra | Metadados suportados presentes/ausentes/falhos, valores fornecidos em `providedValue`, significado e ressalvas; credenciais mascaradas |
-| 5. O que a web acrescentou | Sementes liberadas, perguntas, rodadas, fontes, trechos disponíveis, datas e estado de recuperação |
+| 5. O que a web acrescentou | Sementes liberadas, perguntas, rodadas, fontes, trechos disponíveis, datas e estado de recuperação. Subseção 5.1: exposição da identidade autorizada, quando declarada |
 | 6. Achados e correlações | Cadeia de evidências, inferência, alternativas, estado epistemológico, prioridade e recomendação |
 | 7. Redução de exposição | Ações específicas e verificáveis que o autor pode tomar; distinguir recomendação de ação efetivamente realizada |
 | 8. Cobertura e limites | Perguntas selecionadas, regiões/tentativas, fontes inacessíveis, conflitos, motivo de parada, pendências, estado remoto, uso disponível e retenção/encerramento |
@@ -38,7 +38,7 @@ Se uma seção não tiver dados, mostrar o motivo: `not_present`, `not_supported
 | `recommendation` | Ação concreta para reduzir a exposição ou revisar a hipótese |
 | `review` | `pending`, `accepted`, `rejected` ou `corrected`, distinguindo revisão do autor e saída original |
 
-Uma afirmação externa exige o caminho `achado → fonte web → rodada/semente → evidência visual/metadado`. Informação introduzida pelo usuário fica identificada; não anunciar que o agente a descobriu na foto.
+Uma afirmação externa exige o caminho `achado → fonte web → rodada/semente → evidência visual/metadado`, ou `→ evidência UID` quando a semente vem da identidade declarada. Informação introduzida pelo usuário fica identificada; não anunciar que o agente a descobriu na foto.
 
 ## Qualidade da conclusão
 
@@ -49,6 +49,22 @@ Uma afirmação externa exige o caminho `achado → fonte web → rodada/semente
 - `unknown`: não há base para concluir.
 
 Metadados podem ser editados; GPS registrado não comprova localização atual; horário sem fuso não fixa instante; ausência de dados não prova ausência de exposição. Fontes copiadas não são independentes. Um equipamento ou livro não determina profissão, renda, condição de saúde ou hábito.
+
+## Exposição da identidade autorizada (5.1)
+
+Todo caso novo declara uma identidade sob a autorização de identificação, e suas sementes entram em cada pesquisa. Estados: `executed`, `not_executed` (pesquisa não iniciada, por exemplo por orçamento), `failed`; `not_requested` e `not_authorized` permanecem apenas para casos anteriores à identificação obrigatória.
+
+| Campo | Significado |
+| --- | --- |
+| `scope.identity` | Relação (`self`/`authorized`), nome, profissão, atividades e horário da autorização |
+| `scope.facesVisible` | Rostos visíveis contados pela análise; nenhum é identificado. Outras pessoas além da autorizada ficam fora da pesquisa e geram uma limitação |
+| `sources[].exposure` | Categoria (perfil profissional, produção acadêmica, página institucional, evento, imprensa, rede social, código/portfólio, processo ou diário oficial, outra), classes de dados visíveis (incluindo `legal_mention`) e `match` |
+| `identity.categories` / `identity.dataClasses` | Onde a identidade aparece e que dados ficam alcançáveis, com IDs das fontes atribuídas |
+| `identity.homonymSources` | Fontes marcadas como possível homônimo, fora da contagem |
+| `identity.discovered` | O que a busca descobriu a partir do nome (profissão, organização, formação, atividade, papel público), com as fontes atribuídas que sustentam cada item; `homonymDiscoveries` conta as descobertas deixadas de fora |
+| `identity.breadth` | Amplitude observada: `not_assessed`, `undetermined`, `low`, `moderate` ou `high` |
+
+Critério declarado da amplitude: categorias distintas + contato e menção em processo ou diário oficial (2 cada) + cidade, agenda e foto (1 cada); até 2 baixa, 3 a 5 moderada, 6 ou mais alta. Sem fonte atribuída, `undetermined`. É uma regra de curadoria sobre uma busca limitada, não probabilidade de dano nem cobertura da internet. Classes de contato, cidade e agenda registram que o dado é alcançável; valores não são copiados e telefones, endereços e CEP são mascarados.
 
 ## Prioridade de revisão
 

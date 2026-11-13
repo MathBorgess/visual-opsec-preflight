@@ -10,6 +10,21 @@ Categorias de curadoria: textos/identificadores visíveis; telas/documentos; amb
 
 Não identificar desconhecidos por rosto, inferir residência/rotina, fazer rastreamento, classificar atributos pessoais sensíveis ou procurar credenciais vazadas. Transcrições e valores fornecidos no arquivo são exibidos com origem e ressalvas, sem usá-los como pivô público; credenciais permanecem mascaradas.
 
+## Identidade autorizada
+
+Para mostrar quanto uma foto e uma identidade revelam juntas, todo caso declara o nome de quem aparece na foto, e a pesquisa descobre de forma proativa profissão, organização, formação e atividades: a própria identidade ou a de alguém que autorizou expressamente a pesquisa educativa. A identidade é contexto fornecido (`UID*`, `user_context`), nunca reconhecida pelo rosto.
+
+| Passo | Controle |
+| --- | --- |
+| Criação | Autorizações obrigatórias de ambiente e de identificação; nome obrigatório; campos sem e-mail, telefone, documento ou link; validação no navegador e no backend antes de qualquer chamada |
+| Análise visual | Recebe `declaredIdentity` e pode apontar quando texto/objetos da foto coincidem com a identidade; informa `subjects.facesVisible` (contagem de rostos, sem identificar, descrever traços ou atribuir identidade); não pode propor sementes de identidade (`IDENTITY_SEED_FROM_MODEL`) |
+| Revisão | O backend deriva `PID1` (`"nome" profissão`) e `PID2..` (`"nome" atividade`); elas aparecem fixas e entram em toda pesquisa pela autorização de identificação. Com rosto presente, a pesquisa começa sozinha após 5 s com os sinais marcados, salvo se o autor pausar; sem rosto, aguarda a revisão |
+| Pesquisa | Sessão web recebe somente as sementes liberadas, `identityScope` e perguntas de cruzamento escritas pelo backend para os sinais da foto liberados; sem foto, contexto ou inventário |
+| Validação | Fontes de serviços excluídos, ou com número de processo/identificador pessoal no endereço, são descartadas com achados dependentes; fonte de identidade sem classificação conta como possível homônimo |
+| Síntese e dossiê | `identityExposure`, calculado de forma determinística, orienta o resumo e a seção 5.1 |
+
+A cadeia de uma corroboração sobre a identidade é `achado → fonte web → semente PID → evidência UID`. Uma menção em programação de evento ou página institucional mostra como foto e identidade se reforçam; não comprova presença, vínculo atual, localização ou rotina.
+
 ## Exploração proativa e dados fornecidos
 
 Inventariar sinais complementares, priorizar perguntas pelo ganho verificável e escolher a próxima ação: recorte para texto ambíguo, pesquisa de contexto público para uma semente revisada ou conclusão com limitação. Procurar alternativas e contradições, em vez de acumular páginas. A automação executa recortes elegíveis e rodadas úteis dentro do orçamento; a revisão de sementes delimita a sessão web.
@@ -34,7 +49,7 @@ Se a foto deixou de estar disponível no navegador, pedir a seleção do mesmo a
 
 ## Política do caso
 
-Antes da primeira análise, informar: cópia da foto transita pela Vercel, uma derivada será enviada à OpenAI, metadados selecionados acompanharão o caso e sinais liberados podem ser usados em buscas. O autor informa que a foto é própria/autorizada.
+Antes da primeira análise, informar: cópia da foto transita pela Vercel, uma derivada será enviada à OpenAI, metadados selecionados acompanharão o caso e sinais liberados podem ser usados em buscas. O autor concede duas autorizações: ambiente (a foto é própria/autorizada e pode ter imagem, cenário e metadados analisados) e identificação (a identidade declarada é sua ou de quem autorizou, e pode ser pesquisada em fontes públicas sem a foto).
 
 Antes da pesquisa, apresentar sementes propostas, pergunta e contexto. O autor pode excluir termos e domínios e liberar o conjunto uma vez. Reformulações dentro desse escopo não pedem autorização repetida; novos dados privados não são acrescentados automaticamente.
 

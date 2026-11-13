@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import sharp from 'sharp';
 import { randomFillSync } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
+import { prepareCase } from './case-entry';
 
 test('excesso de pixels é identificado antes do upload com diagnóstico exportável', async ({
   page,
@@ -19,7 +20,7 @@ test('excesso de pixels é identificado antes do upload com diagnóstico export�
   await page
     .getByLabel('Selecionar foto', { exact: true })
     .setInputFiles({ name: 'fixture.png', mimeType: 'image/png', buffer: png });
-  await page.getByRole('checkbox', { name: /Esta foto é própria/ }).check();
+  await prepareCase(page);
   await page.getByRole('button', { name: 'Iniciar simulação' }).click();
   await expect(page.getByRole('main').getByRole('alert')).toContainText('16 MP');
   expect(posts).toBe(0);
@@ -57,7 +58,7 @@ test('foto detalhada que excedia a derivada agora chega à análise e mostra pro
   await page
     .getByLabel('Selecionar foto', { exact: true })
     .setInputFiles({ name: 'detailed.jpg', mimeType: 'image/jpeg', buffer: input });
-  await page.getByRole('checkbox', { name: /Esta foto é própria/ }).check();
+  await prepareCase(page);
   await page.getByRole('button', { name: 'Iniciar simulação' }).click();
   await expect(page.getByRole('status')).toContainText(/Enviando|Aguardando validação/);
   release();
@@ -75,7 +76,7 @@ test('rejeição 413 do servidor sem JSON recebe explicação e diagnóstico', a
   );
   await page.goto('/');
   await page.getByRole('button', { name: 'Usar imagem sintética de exemplo' }).click();
-  await page.getByRole('checkbox', { name: /Esta foto é própria/ }).check();
+  await prepareCase(page);
   await page.getByRole('button', { name: 'Iniciar simulação' }).click();
   await expect(page.getByRole('main').getByRole('alert')).toContainText('tamanho do envio');
   await page.getByText(/Diagnóstico técnico/).click();
@@ -109,7 +110,7 @@ test('registro inicial atrasado continua o acompanhamento sem reenviar a foto', 
   });
   await page.goto('/');
   await page.getByRole('button', { name: 'Usar imagem sintética de exemplo' }).click();
-  await page.getByRole('checkbox', { name: /Esta foto é própria/ }).check();
+  await prepareCase(page);
   await page.getByRole('button', { name: 'Iniciar simulação' }).click();
   await expect(page.getByRole('status')).toContainText(/Aguardando registros iniciais/);
   await expect(

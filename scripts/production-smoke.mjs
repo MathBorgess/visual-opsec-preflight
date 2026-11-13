@@ -54,6 +54,14 @@ function form(bytes, crop) {
   body.set('image', new Blob([bytes], { type: 'image/jpeg' }), 'synthetic.jpg');
   body.set('consent', 'yes');
   if (crop) body.set('regionId', crop);
+  else {
+    // Fictional identity: the case requires identification, and a name that
+    // matches no real person keeps the live check free of personal data.
+    body.set('identityName', 'Personagem Sintetica Opsec');
+    body.set('identityProfession', 'fixture de teste');
+    body.set('identityRelation', 'self');
+    body.set('identityConsent', 'yes');
+  }
   return body;
 }
 try {
@@ -113,7 +121,7 @@ try {
     } else if (view.phase === 'completed') {
       if (
         !view.report ||
-        view.report.version !== 'exposure-report/1.0' ||
+        view.report.version !== 'exposure-report/1.1' ||
         !view.report.visual.some((e) => e.kind === 'visual') ||
         !webVerified
       )

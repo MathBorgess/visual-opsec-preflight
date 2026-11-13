@@ -42,19 +42,79 @@ export const Question = z
     attempts: z.number().int().min(0).max(4),
   })
   .strict();
+// Signals the visual agent may propose. Identity classes are never accepted from
+// a model: the backend derives them from the identity the author declared.
+export const PUBLIC_SEED_CLASSES = [
+  'public_event',
+  'public_organization',
+  'public_domain',
+  'public_place',
+  'product',
+] as const;
+export const IDENTITY_SEED_CLASSES = ['declared_identity', 'declared_activity'] as const;
 export const Seed = z
   .object({
     id,
     text: z.string().min(2).max(120),
     evidenceIds: z.array(id).min(1),
     purpose: text,
-    classification: z.enum([
-      'public_event',
-      'public_organization',
-      'public_domain',
-      'public_place',
-      'product',
-    ]),
+    classification: z.enum([...PUBLIC_SEED_CLASSES, ...IDENTITY_SEED_CLASSES]),
+  })
+  .strict();
+export function isIdentitySeed(seed: { classification: string }) {
+  return (IDENTITY_SEED_CLASSES as readonly string[]).includes(seed.classification);
+}
+// Reserved prefixes for backend-owned identity evidence (UID*) and seeds (PID*).
+export const IDENTITY_EVIDENCE_PREFIX = 'UID';
+export const IDENTITY_SEED_PREFIX = 'PID';
+export const IDENTITY_LIMITS = { name: 60, qualifier: 50, activities: 3 } as const;
+// Identity supplied by the author for an educational self-exposure review. It
+// is context provided under authorization, never inferred from a face.
+export const DeclaredIdentity = z
+  .object({
+    relation: z.enum(['self', 'authorized']),
+    name: z.string().min(2).max(IDENTITY_LIMITS.name),
+    profession: z.string().max(IDENTITY_LIMITS.qualifier),
+    activities: z
+      .array(z.string().min(2).max(IDENTITY_LIMITS.qualifier))
+      .max(IDENTITY_LIMITS.activities),
+    authorizedAt: z.string().max(80),
+  })
+  .strict();
+export const EXPOSURE_CATEGORIES = [
+  'professional_profile',
+  'academic_output',
+  'institutional_page',
+  'event_participation',
+  'media_mention',
+  'social_profile',
+  'code_or_portfolio',
+  // Legal proceedings and official gazettes indexed by aggregators such as
+  // Escavador and Jusbrasil; only the presence of the name is recorded.
+  'public_record',
+  'other',
+] as const;
+// Classes of data visible in a source. Values are never copied: contact,
+// schedule and city only record that the class is publicly reachable.
+export const EXPOSED_DATA = [
+  'full_name',
+  'photo',
+  'role',
+  'employer',
+  'education',
+  'city',
+  'contact',
+  'social_handle',
+  'schedule',
+  'biography',
+  'affiliations',
+  'legal_mention',
+] as const;
+export const SourceExposure = z
+  .object({
+    category: z.enum(EXPOSURE_CATEGORIES),
+    dataClasses: z.array(z.enum(EXPOSED_DATA)).max(EXPOSED_DATA.length),
+    match: z.enum(['declared_identity', 'possible_homonym']),
   })
   .strict();
 export const Region = z
@@ -78,6 +138,7 @@ export const Finding = z
       'public_context',
       'metadata',
       'combination',
+      'identity',
     ]),
     statement: text,
     status: z.enum(['observed', 'corroborated', 'hypothesis', 'contradicted', 'unknown']),
@@ -92,8 +153,17 @@ export const Finding = z
     correction: text,
   })
   .strict();
+// Count of visible human faces, never an identification. The declared identity
+// refers only to the person who authorized it; anyone else stays out of scope.
+export const Subjects = z
+  .object({
+    facesVisible: z.number().int().min(0).max(50),
+    note: text,
+  })
+  .strict();
 export const Analysis = z
   .object({
+    subjects: Subjects.nullable().optional(),
     evidence: z.array(Evidence).max(30),
     questions: z.array(Question).max(5),
     seeds: z.array(Seed).max(12),
@@ -115,6 +185,25 @@ export const Source = z
     publishedAt: z.string().max(80).nullable(),
     retrievalState: z.enum(['snippet_only', 'retrieved', 'unavailable', 'fixture']),
     limitation: text,
+    // Present only for sources about the declared identity; null for photo context.
+    exposure: SourceExposure.nullable().optional(),
+  })
+  .strict();
+// Facets the research discovers proactively from the declared name. Location,
+// contact, schedule, relatives and sensitive attributes are never facets.
+export const DISCOVERED_FACETS = [
+  'profession',
+  'employer',
+  'education',
+  'activity',
+  'public_role',
+] as const;
+export const Discovery = z
+  .object({
+    facet: z.enum(DISCOVERED_FACETS),
+    value: z.string().min(2).max(120),
+    sourceIds: z.array(id).min(1).max(12),
+    match: z.enum(['declared_identity', 'possible_homonym']),
   })
   .strict();
 export const Research = z
@@ -123,6 +212,7 @@ export const Research = z
     findings: z.array(Finding).max(15),
     limitations: z.array(text).max(12),
     followup: text.nullable(),
+    discovered: z.array(Discovery).max(12).optional(),
   })
   .strict();
 export const Synthesis = z
@@ -150,6 +240,25 @@ export type ResearchData = z.infer<typeof Research>;
 export type FindingData = z.infer<typeof Finding>;
 export type BoxData = z.infer<typeof Box>;
 export type SourceData = z.infer<typeof Source>;
+export type SeedData = z.infer<typeof Seed>;
+export type DeclaredIdentityData = z.infer<typeof DeclaredIdentity>;
+export type ExposureCategory = (typeof EXPOSURE_CATEGORIES)[number];
+export type ExposedDataClass = (typeof EXPOSED_DATA)[number];
+export type DiscoveryData = z.infer<typeof Discovery>;
+export type IdentityExposure = {
+  state: 'not_requested' | 'not_authorized' | 'not_executed' | 'executed' | 'failed';
+  seeds: string[];
+  // What the search found from the name, supported by attributed sources.
+  discovered: { facet: DiscoveryData['facet']; value: string; sourceIds: string[] }[];
+  homonymDiscoveries: number;
+  attributedSources: string[];
+  homonymSources: string[];
+  categories: { category: ExposureCategory; sourceIds: string[] }[];
+  dataClasses: { dataClass: ExposedDataClass; sourceIds: string[] }[];
+  breadth: 'not_assessed' | 'undetermined' | 'low' | 'moderate' | 'high';
+  breadthReason: string;
+  limitations: string[];
+};
 export type Stage = 'analysis' | 'region' | 'research' | 'synthesis';
 export type Phase =
   | 'analyzing'
@@ -197,6 +306,7 @@ export type InitialContext = {
   image: ImageInfo;
   context: string;
   authorizedAt: string;
+  declaredIdentity?: DeclaredIdentityData | null;
 };
 export type Manifest = {
   version: 1;
@@ -225,7 +335,7 @@ export type Manifest = {
   deletion: Record<string, 'pending' | 'deleted' | 'failed'>;
 };
 export type Report = {
-  version: 'exposure-report/1.0';
+  version: 'exposure-report/1.1';
   caseId: string;
   generatedAt: string;
   mode: 'demo' | 'openai';
@@ -235,6 +345,8 @@ export type Report = {
     authorizedAt: string;
     selectedSeeds: string[];
     image: { width: number; height: number; format: string };
+    identity: DeclaredIdentityData | null;
+    facesVisible: number | null;
   };
   summary: string;
   visual: AnalysisData['evidence'];
@@ -244,6 +356,7 @@ export type Report = {
     seeds: z.infer<typeof Seed>[];
     sources: SourceData[];
   };
+  identity: IdentityExposure;
   findings: FindingData[];
   recommendations: string[];
   coverage: {
@@ -262,7 +375,7 @@ export type Report = {
     usageTokens: number | null;
     cost: null;
   };
-  method: { model: string; promptVersion: '2'; imageProcessor: string; sourceCatalog: string[] };
+  method: { model: string; promptVersion: '3'; imageProcessor: string; sourceCatalog: string[] };
 };
 export type PendingCaseView = {
   pending: true;
@@ -279,6 +392,7 @@ export type CaseView = {
   mode: 'demo' | 'openai';
   phase: Phase;
   image: Omit<ImageInfo, 'hash'>;
+  identity: DeclaredIdentityData | null;
   analysis: AnalysisData;
   research: ResearchData | null;
   report: Report | null;
@@ -366,6 +480,12 @@ export function validateAnalysis(data: AnalysisData, previous?: AnalysisData) {
       throw new AppError('INVALID_BOX', 'Uma região saiu dos limites da imagem.', 502);
   for (const q of data.questions) assertRefs(q.evidenceIds, known);
   for (const s of data.seeds) {
+    if (isIdentitySeed(s) || s.id.startsWith(IDENTITY_SEED_PREFIX))
+      throw new AppError(
+        'IDENTITY_SEED_FROM_MODEL',
+        'Sementes de identidade só podem vir da identidade declarada pelo autor.',
+        502,
+      );
     assertRefs(s.evidenceIds, known);
     if (
       s.evidenceIds.some((id) => data.evidence.find((e) => e.id === id)?.sensitivity !== 'public')

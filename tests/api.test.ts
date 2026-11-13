@@ -5,6 +5,7 @@ import { createApi } from '@/server/api';
 import { DemoProvider } from '@/server/demo';
 import { readManifest, signManifest } from '@/server/security';
 import { reportMarkdown } from '@/lib/report';
+import { identitySeeds, readDeclaredIdentity } from '@/lib/identity';
 import { Analysis, AppError, LIMITS, type CaseView, type Manifest } from '@/lib/contracts';
 import type { AgentsProvider, ProviderRequest, Snapshot } from '@/server/provider';
 import { ProviderError } from '@/server/provider-error';
@@ -97,7 +98,21 @@ function form(bytes = photo, consent = true) {
   f.set('image', new File([new Uint8Array(bytes)], 'personal-name.jpg', { type: 'image/jpeg' }));
   f.set('consent', consent ? 'yes' : 'no');
   f.set('context', 'PRIVATE_CONTEXT owner@example.invalid');
+  // Every case declares who appears in the photo under its own authorization.
+  // The interface asks only for the name; the search discovers the rest.
+  f.set('identityName', 'Bruna Ficticia');
+  f.set('identityRelation', 'self');
+  f.set('identityConsent', 'yes');
   return f;
+}
+// Photo-research mechanics are tested in isolation from the fictional identity
+// sources that the demo adds to every research round.
+function photoResearchOnly(output: unknown) {
+  if (!output || typeof output !== 'object' || !('sources' in output)) return output;
+  const research = output as { sources: { id: string }[]; findings: { id: string }[] };
+  research.sources = research.sources.filter((s) => s.id === 'W1');
+  research.findings = research.findings.filter((f) => f.id === 'FW1');
+  return research;
 }
 function region(bytes = photo) {
   const f = new FormData();
@@ -326,11 +341,36 @@ describe('API do caso — jornada e fronteiras', () => {
     f.set('questionId', 'nonexistent');
     expect((await h.call('region', f)).data.error.code).toBe('BRANCH_CLOSED');
   });
-  it('sem sementes aprovadas, gera documento sem alegar pesquisa', async () => {
+  it('sem sinais da foto selecionados, a pesquisa cobre só a identidade autorizada', async () => {
     const h = await toReview();
     await h.call('advance', { action: 'search', seedIds: [] });
-    const done = await h.call('get');
-    expect(done.data.report.research.state).toBe('not_authorized');
+    const search = h.provider.calls.find((c) => c.stage === 'research')!;
+    const seeds = search.data.seeds as { id: string; text: string; purpose: string }[];
+    expect(seeds.map((seed) => [seed.id, seed.text])).toEqual([['PID1', '"Bruna Ficticia"']]);
+    expect(seeds[0].purpose).toContain('proativamente');
+    await h.call('get');
+    await h.call('advance', { action: 'synthesize' });
+    const report = (await h.call('get')).data.report;
+    expect(report.research.state).toBe('executed');
+    expect(report.scope.selectedSeeds).toEqual(['PID1']);
+    expect(report.identity.state).toBe('executed');
+    expect(report.research.sources.map((s: { id: string }) => s.id)).not.toContain('W1');
+    expect(report.findings.map((f: { id: string }) => f.id)).not.toContain('FW3');
+  });
+  it('caso anterior à identificação obrigatória continua legível e não alega pesquisa', async () => {
+    class Legacy extends DemoProvider {
+      async read(id: string) {
+        const s = await super.read(id);
+        return { ...s, initial: { ...s.initial, declaredIdentity: undefined } };
+      }
+    }
+    const h = await toReview(harness(new Legacy()));
+    expect((await h.call('get')).data.identity).toBeNull();
+    await h.call('advance', { action: 'search', seedIds: [] });
+    const report = (await h.call('get')).data.report;
+    expect(report.research.state).toBe('not_authorized');
+    expect(report.identity.state).toBe('not_requested');
+    expect(reportMarkdown(report)).toContain('o caso analisou somente a foto');
     expect(h.provider.calls.some((c) => c.stage === 'research')).toBe(false);
   });
   it('não permite semear identificador privado ou domínio interno', async () => {
@@ -804,6 +844,8 @@ describe('API do caso — jornada e fronteiras', () => {
         async read(id: string) {
           const s = await super.read(id);
           if (s.initial.kind !== 'research') return s;
+          s.outputs.forEach(photoResearchOnly);
+          photoResearchOnly(s.output);
           if (this.calls.filter((r) => r.stage === 'research').length === 1) {
             (s.output as { followup: string }).followup = 'Conferir uma alternativa pública.';
             return s;
@@ -841,6 +883,7 @@ describe('API do caso — jornada e fronteiras', () => {
         if (s.initial.kind === 'research') {
           for (const o of s.outputs) {
             if (!o || typeof o !== 'object' || !('sources' in o)) continue;
+            photoResearchOnly(o);
             const research = o as {
               sources: Record<string, unknown>[];
               findings: Record<string, unknown>[];
@@ -998,3 +1041,232 @@ describe('API do caso — jornada e fronteiras', () => {
     expect(v.data.report.coverage.limitations.join(' ')).toContain('W1');
   });
 });
+
+function identityForm(patch: Record<string, string> = {}) {
+  const f = form();
+  const fields = {
+    identityName: 'Ana Exemplo',
+    identityProfession: 'professora de física',
+    identityActivities: 'palestrante em eventos\ncorrida de rua',
+    identityRelation: 'self',
+    identityConsent: 'yes',
+    ...patch,
+  };
+  for (const [key, value] of Object.entries(fields)) f.set(key, value);
+  return f;
+}
+async function identityReview(h = harness()) {
+  expect((await h.call('create', identityForm())).status).toBe(201);
+  expect((await h.call('get')).data.phase).toBe('exploring');
+  await h.call('region', region());
+  const v = await h.call('get');
+  expect(v.data.phase).toBe('awaiting_search_review');
+  return { h, view: v.data as CaseView };
+}
+
+describe('trilha de identidade autorizada', () => {
+  it('exige identidade e as autorizações de ambiente e identificação antes de chamar IA', async () => {
+    const h = harness();
+    expect((await h.call('create', identityForm({ consent: 'no' }))).data.error.code).toBe(
+      'CONSENT_REQUIRED',
+    );
+    expect((await h.call('create', identityForm({ identityName: '' }))).data.error.code).toBe(
+      'IDENTITY_REQUIRED',
+    );
+    expect((await h.call('create', identityForm({ identityConsent: 'no' }))).data.error.code).toBe(
+      'IDENTITY_CONSENT_REQUIRED',
+    );
+    expect(
+      (await h.call('create', identityForm({ identityName: 'ana@example.org' }))).data.error.code,
+    ).toBe('IDENTITY_INVALID');
+    expect(
+      (await h.call('create', identityForm({ identityActivities: 'contato (81) 99999-1234' }))).data
+        .error.code,
+    ).toBe('IDENTITY_INVALID');
+    expect(h.provider.calls).toHaveLength(0);
+    expect(h.cookie()).toBe('');
+  });
+  it('pesquisa a identidade liberada sem foto e mede a exposição no dossiê', async () => {
+    const { h, view } = await identityReview();
+    expect(h.provider.calls[0].data.declaredIdentity).toMatchObject({
+      name: 'Ana Exemplo',
+      relation: 'self',
+    });
+    expect(view.identity?.name).toBe('Ana Exemplo');
+    expect(view.analysis.seeds.map((s) => s.id)).toEqual(['S1', 'PID1', 'PID2', 'PID3']);
+    expect(view.analysis.evidence.find((e) => e.id === 'UID1')?.description).toContain(
+      'Ana Exemplo',
+    );
+    // The author selects photo signals; the identification authorization adds the identity.
+    expect((await h.call('advance', { action: 'search', seedIds: ['S1'] })).status).toBe(202);
+    const search = h.provider.calls.find((c) => c.stage === 'research')!;
+    const payload = JSON.stringify(search);
+    expect(search.image).toBeUndefined();
+    expect(payload).toContain('\\"Ana Exemplo\\" professora de física');
+    expect(payload).toContain('\\"Ana Exemplo\\" corrida de rua');
+    for (const hidden of ['PRIVATE_CONTEXT', 'owner@example', 'GPS', 'PRIVATE_AUTHOR'])
+      expect(payload).not.toContain(hidden);
+    expect(String((search.data.identityScope as Record<string, unknown>).permittedSources)).toMatch(
+      /Escavador\/Jusbrasil/,
+    );
+    expect(String((search.data.identityScope as Record<string, unknown>).outOfScope)).toContain(
+      'familiares, colegas',
+    );
+    expect(search.data.identityScope).toMatchObject({
+      relation: 'self',
+      declaredSeedIds: ['PID1', 'PID2', 'PID3'],
+    });
+    const questions = search.data.questions as { seedId: string; question: string }[];
+    expect(questions.filter((q) => q.seedId === 'S1').map((q) => q.question)).toHaveLength(2);
+    const ready = await h.call('get');
+    expect(ready.data.phase).toBe('research_ready');
+    expect(
+      ready.data.research.sources.find((s: { id: string }) => s.id === 'W2').exposure.match,
+    ).toBe('declared_identity');
+    await h.call('advance', { action: 'synthesize' });
+    const synthesis = h.provider.calls.find((c) => c.stage === 'synthesis')!;
+    expect(synthesis.data.identityExposure).toMatchObject({ state: 'executed' });
+    expect(String(synthesis.data.instruction)).toContain('homônimo');
+    const done = await h.call('get');
+    const report = done.data.report;
+    expect(report.version).toBe('exposure-report/1.1');
+    expect(report.scope.identity.name).toBe('Ana Exemplo');
+    expect(report.identity).toMatchObject({
+      state: 'executed',
+      attributedSources: ['W2', 'W3', 'W5'],
+      homonymSources: ['W4'],
+      // 3 categories + legal mention (2) + photo + city + schedule = 8 points.
+      breadth: 'high',
+    });
+    expect(report.scope.facesVisible).toBe(1);
+    expect(report.identity.discovered.map((d: { facet: string }) => d.facet)).toEqual([
+      'profession',
+      'employer',
+      'activity',
+    ]);
+    expect(report.identity.homonymDiscoveries).toBe(1);
+    expect(
+      report.identity.categories.find((c: { category: string }) => c.category === 'public_record')
+        .sourceIds,
+    ).toEqual(['W5']);
+    expect(report.findings.map((f: { id: string }) => f.id)).toEqual(
+      expect.arrayContaining(['FW2', 'FW3']),
+    );
+    const markdown = reportMarkdown(report);
+    expect(markdown.match(/^## [1-8]\./gm)).toHaveLength(8);
+    expect(markdown).toContain('### 5.1 Exposição da identidade autorizada');
+    expect(markdown).toContain('Amplitude observada: Alta');
+    expect(markdown).toContain('Rostos visíveis: 1');
+    expect(markdown).toContain('Processo ou diário oficial: W5');
+    expect(markdown).toContain('Organização: Instituto Exemplo (fictício) (W2)');
+    expect(markdown).toContain('possível homônimo');
+  });
+  it('a autorização de identificação não aceita sementes de identidade inventadas', async () => {
+    const { h } = await identityReview();
+    expect(
+      (await h.call('advance', { action: 'search', seedIds: ['S1', 'PID9'] })).data.error.code,
+    ).toBe('SENSITIVE_QUERY');
+    expect(h.provider.calls.some((c) => c.stage === 'research')).toBe(false);
+    // Repeating a declared seed is harmless: each identity seed is sent once.
+    await h.call('advance', { action: 'search', seedIds: ['PID1', 'S1', 'PID1'] });
+    const search = h.provider.calls.find((c) => c.stage === 'research')!;
+    expect((search.data.seeds as { id: string }[]).map((seed) => seed.id)).toEqual([
+      'S1',
+      'PID1',
+      'PID2',
+      'PID3',
+    ]);
+  });
+  it('semente de identidade proposta pelo modelo invalida a análise', async () => {
+    class Impostor extends DemoProvider {
+      async read(id: string) {
+        const s = await super.read(id);
+        for (const o of s.outputs)
+          if (o && typeof o === 'object' && 'seeds' in o)
+            (o as { seeds: unknown[] }).seeds.push({
+              id: 'S2',
+              text: 'Pessoa Desconhecida',
+              evidenceIds: ['V1'],
+              purpose: 'Buscar a pessoa da foto.',
+              classification: 'declared_identity',
+            });
+        return s;
+      }
+    }
+    const h = harness(new Impostor());
+    await h.call('create', form());
+    const v = await h.call('get');
+    expect(v.data.phase).toBe('partial');
+    expect(v.data.stopReason).toBe('policy_violation');
+    // Only the backend-derived seed of the declared identity remains.
+    expect(v.data.analysis.seeds.map((seed: { id: string }) => seed.id)).toEqual(['PID1']);
+  });
+  it('recorte não devolve sementes de identidade ao modelo e tolera eco exato', async () => {
+    class Echo extends DemoProvider {
+      async read(id: string) {
+        const s = await super.read(id);
+        const identity = readDeclaredIdentity(s.initial.declaredIdentity);
+        for (const o of s.outputs) {
+          const parsed = Analysis.safeParse(o);
+          if (parsed.success && parsed.data.evidence.some((e) => e.id === 'V2'))
+            (o as { seeds: unknown[] }).seeds.push(identitySeeds(identity)[0]);
+        }
+        return s;
+      }
+    }
+    const { h, view } = await identityReview(harness(new Echo()));
+    const crop = h.provider.calls.find((c) => c.stage === 'region')!;
+    const previous = (crop.data.previous as { seeds: { id: string }[] }).seeds;
+    expect(previous.map((seed) => seed.id)).toEqual(['S1']);
+    expect(view.error).toBeNull();
+    expect(view.analysis.seeds.map((seed) => seed.id)).toEqual(['S1', 'PID1', 'PID2', 'PID3']);
+  });
+  it('outras pessoas visíveis ficam fora da pesquisa e o dossiê registra isso', async () => {
+    class Group extends DemoProvider {
+      async read(id: string) {
+        const s = await super.read(id);
+        for (const o of s.outputs) {
+          const parsed = Analysis.safeParse(o);
+          if (parsed.success)
+            (o as { subjects: unknown }).subjects = {
+              facesVisible: 3,
+              note: 'Um rosto em primeiro plano e dois ao fundo.',
+            };
+        }
+        return s;
+      }
+    }
+    const { h } = await identityReview(harness(new Group()));
+    await h.call('advance', { action: 'search', seedIds: ['S1'] });
+    const search = JSON.stringify(h.provider.calls.find((c) => c.stage === 'research'));
+    expect(search).not.toContain('dois ao fundo');
+    await h.call('get');
+    await h.call('advance', { action: 'synthesize' });
+    const report = (await h.call('get')).data.report;
+    expect(report.scope.facesVisible).toBe(3);
+    expect(report.identity.limitations.join(' ')).toContain('2 outra(s) pessoa(s) visível(is)');
+  });
+  it('fonte de buscador de pessoas é descartada com os achados dependentes', async () => {
+    class Broker extends DemoProvider {
+      async read(id: string) {
+        const s = await super.read(id);
+        if (s.initial.kind === 'research')
+          for (const o of s.outputs)
+            for (const source of (o as ResearchLike).sources)
+              if (source.id === 'W2') source.url = 'https://www.spokeo.com/Ana-Exemplo';
+        return s;
+      }
+    }
+    const { h } = await identityReview(harness(new Broker()));
+    await h.call('advance', { action: 'search', seedIds: ['PID1', 'PID2'] });
+    const ready = await h.call('get');
+    expect(ready.data.research.sources.map((s: { id: string }) => s.id)).toEqual([
+      'W3',
+      'W4',
+      'W5',
+    ]);
+    expect(ready.data.research.findings.map((f: { id: string }) => f.id)).not.toContain('FW2');
+    expect(ready.data.research.limitations.join(' ')).toContain('buscador de pessoas');
+  });
+});
+type ResearchLike = { sources: { id: string; url: string }[] };

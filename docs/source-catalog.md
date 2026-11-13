@@ -41,7 +41,13 @@ Remover um resultado de busca não apaga a página original. Conforme a [ajuda G
 
 HIBP e similares não são catálogos completos de todos os vazamentos. Não encontrar correspondência não demonstra ausência de comprometimento. Não enviar senha, token ou e-mail privado ao web search para “ver se vazou”; nenhum dump, pasta de vazamento, credencial roubada ou stealer log é adquirido pelo produto.
 
-Uma futura trilha de autoavaliação de identidade exigiria escopo explícito por identificador/conta fornecido pelo titular e mecanismo apropriado. Não estender autorização de analisar a foto para investigar familiares, colegas ou desconhecidos.
+## Trilha de identidade autorizada
+
+| ID | Informação desejada | Fonte | Uso e limite |
+| --- | --- | --- | --- |
+| SRC-12 | Quanto a identidade declarada aparece publicamente | LinkedIn, Lattes, GitHub, perfis públicos em redes sociais, páginas institucionais, publicações, programações de eventos, imprensa, portfólios, e Escavador/Jusbrasil para menções em processos ou diários oficiais, via web search nativo | Parte do nome declarado pelo titular ou por pessoa que autorizou expressamente e descobre profissão e atividades, sob a autorização de identificação do caso. Registra categoria e classes de dados, sem copiar contato, endereço, documento ou agenda. Homônimos são marcados e não contam |
+
+A autorização de ambiente não se estende à identidade: a identificação tem autorização própria, obrigatória em todo caso, e relação declarada. A trilha não descobre quem está na foto, não usa o rosto e não amplia para familiares, colegas, contatos ou homônimos. Escavador e Jusbrasil entram somente para a identidade declarada (`public_record`/`legal_mention`): registra-se que o nome aparece, sem número de processo, partes, valores ou natureza do caso, e fontes com número de processo no endereço são descartadas. O controlador descarta fontes de uma lista curta e não exaustiva de outros buscadores de pessoas, busca facial e bases de vazamentos (`EXCLUDED_SOURCE_HOSTS` em `src/lib/policy.ts`); a instrução ao modelo continua sendo a primeira barreira. Somente a pessoa autorizada é pesquisada: familiares, colegas, coautores, partes de processos e outras pessoas da foto ficam fora.
 
 ## Fontes e ações excluídas
 
