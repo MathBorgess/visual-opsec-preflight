@@ -20,7 +20,10 @@ export function minimize(value: string) {
 export function maskCredentials(value: string) {
   return value
     .replace(/\b(?:sk-|ghp_|AKIA)[\w-]{8,}|\bBearer\s+[\w.-]+/gi, '[credencial omitida]')
-    .replace(/\b(?:password|senha|token|api.?key)\s*[:=]\s*[^\s\\"',;}\]]+/gi, '[segredo omitido]');
+    .replace(
+      /\b(?:password|senha|token|api[ _.-]?key)\b["']?\s*[:=]\s*(?:"(?:\\.|[^"\\])*(?:"|$)|'(?:\\.|[^'\\])*(?:'|$)|[^\s\\"',;}\]]+)/gi,
+      '[segredo omitido]',
+    );
 }
 export function presentEvidence(e: AnalysisData['evidence'][number]) {
   return {

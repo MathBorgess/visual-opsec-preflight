@@ -111,7 +111,7 @@ export async function processImage(
             : 'Não encontrado nos campos suportados.',
         private: privateValue,
         ...(!parseFailed && present && providedValue
-          ? { providedValue: maskCredentials(providedValue.slice(0, 1000)) }
+          ? { providedValue: maskCredentials(providedValue).slice(0, 1000) }
           : {}),
       });
     const fields = (keys: string[]) =>

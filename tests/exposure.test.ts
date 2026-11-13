@@ -39,7 +39,8 @@ describe('dados fornecidos e inferências no dossiê', () => {
           state: 'present',
           private: true,
           value: 'Não confirma identidade.',
-          providedValue: 'Artist: Ana Exemplo; token=segredoficticio',
+          providedValue:
+            'Artist: Ana Exemplo; token=segredoficticio; senha="segredoficticio com espaços"; {"token":"segredoficticio"}',
         },
       ],
     } as Report;
