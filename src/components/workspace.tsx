@@ -634,6 +634,10 @@ export function Workspace() {
                     ? 'Iniciar simulação →'
                     : 'Analisar exposição →'}
               </button>
+              <p className="muted">
+                O dossiê inclui textos legíveis e valores de GPS, autoria e data presentes no
+                arquivo, com suas limitações. Revise esses dados antes de compartilhar.
+              </p>
               {!config?.available && config && (
                 <p className="muted">
                   Integração indisponível. A configuração da chave acontece somente no backend.
@@ -785,6 +789,12 @@ export function Workspace() {
                       {e.id} · {e.kind}
                     </span>
                     <p>{e.description}</p>
+                    {e.verbatimText && (
+                      <p>
+                        <strong>Texto legível fornecido:</strong> {e.verbatimText}. Leitura do
+                        modelo; não confirma identidade.
+                      </p>
+                    )}
                     <small>{e.limitation}</small>
                   </div>
                 ))}
@@ -872,6 +882,11 @@ export function Workspace() {
                       <strong>{m.field}</strong>
                       <span>{m.state}</span>
                       <p>{m.value}</p>
+                      {m.providedValue && (
+                        <p>
+                          <strong>Valor no arquivo:</strong> {m.providedValue}
+                        </p>
+                      )}
                     </div>
                   ))}
                 </details>
@@ -1045,16 +1060,35 @@ function ReportPanel({ report, onChange }: { report: Report; onChange: (r: Repor
       </p>
       <h3>2. Resumo de exposição</h3>
       <p>{report.summary}</p>
+      <p className="muted">
+        Este documento inclui valores presentes na foto e no arquivo. Revise antes de compartilhar.
+        Nomes transcritos não identificam pessoas pelo rosto; GPS e datas não comprovam localização
+        atual ou rotina.
+      </p>
       <h3>3. O que a foto mostra</h3>
       {report.visual.map((e) => (
-        <p key={e.id}>
-          <strong>{e.id}</strong> {e.description} <small>{e.limitation}</small>
-        </p>
+        <div key={e.id}>
+          <p>
+            <strong>{e.id}</strong> {e.description} <small>{e.limitation}</small>
+          </p>
+          {e.verbatimText && (
+            <p>
+              <strong>Texto legível fornecido:</strong> {e.verbatimText}. Leitura do modelo; não
+              confirma identidade.
+            </p>
+          )}
+        </div>
       ))}
       <h3>4. O que o arquivo registra</h3>
       {report.metadata.map((m) => (
         <p key={m.id}>
           <strong>{m.field}:</strong> {m.value} <span className="tag">{m.state}</span>
+          {m.providedValue && (
+            <>
+              <br />
+              <strong>Valor no arquivo:</strong> {m.providedValue}
+            </>
+          )}
         </p>
       ))}
       <h3>5. O que a web acrescentou</h3>

@@ -60,6 +60,8 @@ A chave autentica o backend na OpenAI; nunca é campo de prompt, ferramenta, ima
 
 A derivada enviada ao modelo não substitui o original como evidência. Reconhecimento visual de texto não equivale a OCR determinístico ou leitura confiável de toda região. Caixas do modelo são localizadores de revisão, não máscaras certificadas.
 
+O contrato distingue descrição/inferência de valores fornecidos: `Evidence.verbatimText` é leitura visual ancorada em região e `MetadataRow.providedValue` é valor extraído de campo suportado do arquivo. Nomes/cargos legíveis, GPS, autoria e data são apresentados na interface e exportações com ressalvas; credenciais são mascaradas. Esses campos não entram na sessão web. A classificação `public_place` permite pesquisar locais públicos reconhecíveis revisados, sem autorizar residência, coordenadas ou perfis individuais. O backend reconstrói perguntas web por categoria, sem copiar propósito livre ou transcrição pessoal.
+
 ## Controle de exploração
 
 A aplicação mantém uma fila de perguntas ligada às evidências. O [loop de exploração](exploration-loop.md) define ganho, parada por ramo/global e quais controles são do backend, do provedor ou instruções avaliadas do modelo. O [catálogo de fontes](source-catalog.md) delimita consultas automáticas e caminhos de autoavaliação manual; não adiciona APIs à V1.

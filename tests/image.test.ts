@@ -63,7 +63,9 @@ describe('parser e derivada reais', () => {
     );
     expect(metadata.exif).toBeUndefined();
     expect(metadata.xmp).toBeUndefined();
-    expect(JSON.stringify(result.info)).not.toContain('PRIVATE_FIXTURE');
+    expect(
+      result.info.metadata.find((row) => row.field === 'Autoria/identificadores')?.providedValue,
+    ).toContain('Artist: PRIVATE_FIXTURE');
     await expect(
       preflightImage(new File([new Uint8Array(input)], 'fixture.jpg')),
     ).resolves.toMatchObject({ width: 2048, height: 2048 });

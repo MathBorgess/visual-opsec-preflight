@@ -24,6 +24,8 @@ export const Evidence = z
     id,
     kind: z.enum(['visual', 'metadata', 'user_context', 'web']),
     description: text,
+    // Literal reading from an image region; never an inferred identity.
+    verbatimText: text.nullable().optional(),
     sensitivity: z.enum(['public', 'private', 'unknown']),
     bbox: Box.nullable(),
     limitation: text,
@@ -46,7 +48,13 @@ export const Seed = z
     text: z.string().min(2).max(120),
     evidenceIds: z.array(id).min(1),
     purpose: text,
-    classification: z.enum(['public_event', 'public_organization', 'public_domain', 'product']),
+    classification: z.enum([
+      'public_event',
+      'public_organization',
+      'public_domain',
+      'public_place',
+      'product',
+    ]),
   })
   .strict();
 export const Region = z
@@ -171,6 +179,7 @@ export type MetadataRow = {
   field: string;
   state: 'present' | 'not_present' | 'failed' | 'not_supported';
   value: string;
+  providedValue?: string;
   private: boolean;
 };
 export type ImageInfo = {
@@ -253,7 +262,7 @@ export type Report = {
     usageTokens: number | null;
     cost: null;
   };
-  method: { model: string; promptVersion: '1'; imageProcessor: string; sourceCatalog: string[] };
+  method: { model: string; promptVersion: '2'; imageProcessor: string; sourceCatalog: string[] };
 };
 export type PendingCaseView = {
   pending: true;

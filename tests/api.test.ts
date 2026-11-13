@@ -224,7 +224,13 @@ describe('API do caso — jornada e fronteiras', () => {
     expect(view.report?.scope.image.height).toBe(800);
     expect(view.report?.metadata.find((m) => m.field === 'GPS')?.state).toBe('present');
     const output = JSON.stringify(view.report);
-    expect(output).not.toContain('PRIVATE_AUTHOR');
+    expect(
+      view.report?.metadata.find((m) => m.field === 'Autoria/identificadores')?.providedValue,
+    ).toContain('Artist: PRIVATE_AUTHOR');
+    expect(view.report?.metadata.find((m) => m.field === 'GPS')?.providedValue).toContain(
+      'latitude: 11.375833',
+    );
+    expect(JSON.stringify(search)).not.toContain('PRIVATE_AUTHOR');
     expect(output).not.toContain('personal-name.jpg');
     expect(output).not.toContain('visualId');
     expect(reportMarkdown(view.report!).match(/^## [1-8]\./gm)).toHaveLength(8);
@@ -233,6 +239,41 @@ describe('API do caso — jornada e fronteiras', () => {
     const close = await h.call('delete');
     expect(close.data.closed).toBe(true);
     expect(close.headers.get('set-cookie')).toContain('Max-Age=0');
+  });
+  it('preserva nome e cargo transcritos com região, sem repassá-los à pesquisa pública', async () => {
+    class Badge extends DemoProvider {
+      async read(id: string) {
+        const s = await super.read(id);
+        for (const o of s.outputs) {
+          const parsed = Analysis.safeParse(o);
+          if (parsed.success)
+            parsed.data.evidence.push({
+              id: 'V_BADGE',
+              kind: 'visual',
+              sensitivity: 'private',
+              description: 'Nome e cargo escritos em um crachá.',
+              verbatimText: 'Ana Exemplo — Engenheira de software',
+              bbox: [0.2, 0.2, 0.1, 0.1],
+              limitation: 'Leitura do modelo; não confirma identidade nem vínculo atual.',
+            });
+          if (parsed.success) Object.assign(o as object, parsed.data);
+        }
+        return s;
+      }
+    }
+    const h = await toReview(harness(new Badge()));
+    await h.call('advance', { action: 'search', seedIds: ['S1'] });
+    expect(JSON.stringify(h.provider.calls.find((r) => r.stage === 'research'))).not.toContain(
+      'Ana Exemplo',
+    );
+    await h.call('get');
+    await h.call('advance', { action: 'synthesize' });
+    const result = await h.call('get');
+    const evidence = result.data.report.visual.find((e: { id: string }) => e.id === 'V_BADGE');
+    expect(evidence.verbatimText).toBe('Ana Exemplo — Engenheira de software');
+    expect(evidence.bbox).toEqual([0.2, 0.2, 0.1, 0.1]);
+    expect(reportMarkdown(result.data.report)).toContain('Ana Exemplo');
+    expect(reportMarkdown(result.data.report)).toContain('não confirma identidade');
   });
   it('valida consentimento, formato, corrupção e tamanho antes de chamar IA', async () => {
     const h = harness();

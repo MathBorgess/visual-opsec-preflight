@@ -8,7 +8,15 @@ Explorar o que uma única foto própria/autorizada permite observar ou correlaci
 
 Categorias de curadoria: textos/identificadores visíveis; telas/documentos; ambiente e objetos; tecnologia observável; contexto público pesquisável; metadados do arquivo; combinação dos sinais. A presença de equipamento, crachá ou livro não prova profissão, propriedade, rotina ou preferência estável.
 
-Não identificar desconhecidos por rosto, inferir residência/rotina, fazer rastreamento, classificar atributos pessoais sensíveis ou procurar credenciais vazadas. Dados sensíveis visíveis podem ser registrados como exposição com valor minimizado, sem usá-los como pivô público.
+Não identificar desconhecidos por rosto, inferir residência/rotina, fazer rastreamento, classificar atributos pessoais sensíveis ou procurar credenciais vazadas. Transcrições e valores fornecidos no arquivo são exibidos com origem e ressalvas, sem usá-los como pivô público; credenciais permanecem mascaradas.
+
+## Exploração proativa e dados fornecidos
+
+Inventariar sinais complementares, priorizar perguntas pelo ganho verificável e escolher a próxima ação: recorte para texto ambíguo, pesquisa de contexto público para uma semente revisada ou conclusão com limitação. Procurar alternativas e contradições, em vez de acumular páginas. A automação executa recortes elegíveis e rodadas úteis dentro do orçamento; a revisão de sementes delimita a sessão web.
+
+O dossiê preserva nomes/cargos literalmente escritos e valores dos campos de GPS/autoria/data do arquivo, com origem e ressalvas. Não vincula nome a rosto nem transforma cargo escrito em profissão confirmada. Cena, vestuário, equipamento e agenda de evento não comprovam emprego, rotina ou deslocamentos. Pessoas na foto compõem observações do material, sem se tornarem alvos de busca.
+
+`public_place` permite contextualizar local público reconhecível, como museu ou monumento, após revisão da semente. Não libera endereço residencial ou coordenadas. O backend reconstrói perguntas por categoria: edição/organizador de evento, atividade de organização, finalidade de domínio, denominação de local e documentação de produto. Não encaminha propósito livre nem transcrição pessoal à sessão web. Proibições de reconhecimento de rosto e inferências pessoais são instruções ao modelo; não são garantia determinística sobre toda resposta.
 
 ## Passagens do mesmo fluxo
 
