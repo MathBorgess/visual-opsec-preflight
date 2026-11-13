@@ -1,6 +1,7 @@
 'use client';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { CaseView, Report } from '@/lib/contracts';
+import { AppError, type CaseView, type Diagnostic, type Report } from '@/lib/contracts';
+import { preflightImage } from '@/lib/upload';
 import { minimizeReport, reportMarkdown } from '@/lib/report';
 import { safeUrl } from '@/lib/policy';
 
@@ -49,9 +50,74 @@ async function request(path: string, options?: RequestInit) {
   if (!r.ok)
     throw Object.assign(
       new Error(data.error?.message ?? data.message ?? 'A operação não foi confirmada.'),
-      { code: data.error?.code },
+      { code: data.error?.code, diagnostic: data.diagnostic },
     );
   return data;
+}
+function uploadCase(
+  form: FormData,
+  requestId: string,
+  onProgress: (text: string) => void,
+): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    const started = Date.now();
+    xhr.open('POST', '/api/cases');
+    xhr.setRequestHeader('x-opsec-request-id', requestId);
+    xhr.timeout = 60_000;
+    const failure = (message: string) =>
+      reject(
+        Object.assign(new Error(message), {
+          diagnostic: {
+            requestId,
+            stage: 'upload_or_server',
+            elapsedMs: Date.now() - started,
+            providerInvoked: null,
+            code: 'CONNECTION_UNCONFIRMED',
+          },
+        }),
+      );
+    xhr.upload.onprogress = (event) =>
+      onProgress(
+        event.lengthComputable
+          ? `Enviando foto: ${Math.round((event.loaded * 100) / event.total)}%`
+          : 'Enviando foto…',
+      );
+    xhr.upload.onload = () =>
+      onProgress('Envio concluído. Aguardando validação, metadados e preparação no servidor…');
+    xhr.onerror = () => failure('A conexão falhou. Consulte o estado antes de reenviar a foto.');
+    xhr.ontimeout = () =>
+      failure('O servidor não confirmou o envio no prazo. Consulte o estado antes de reenviar.');
+    xhr.onload = () => {
+      let data;
+      try {
+        data = JSON.parse(xhr.responseText);
+      } catch {
+        data = {};
+      }
+      if (xhr.status < 200 || xhr.status >= 300) {
+        const diagnostic = data.diagnostic ?? {
+          requestId,
+          stage: 'upload_or_server',
+          elapsedMs: Date.now() - started,
+          providerInvoked: xhr.status === 413 ? false : null,
+          code: `HTTP_${xhr.status}`,
+        };
+        reject(
+          Object.assign(
+            new Error(
+              data.error?.message ??
+                (xhr.status === 413
+                  ? 'O servidor recusou o tamanho do envio. Use uma foto de até 3 MiB.'
+                  : 'O envio não foi confirmado. Copie o diagnóstico.'),
+            ),
+            { code: data.error?.code, diagnostic },
+          ),
+        );
+      } else resolve(data);
+    };
+    xhr.send(form);
+  });
 }
 function download(report: Report, format: 'json' | 'md') {
   const safeReport = minimizeReport(report);
@@ -69,6 +135,10 @@ function download(report: Report, format: 'json' | 'md') {
 }
 
 export function Workspace() {
+  const [diagnostic, setDiagnostic] = useState<Diagnostic | null>(null);
+  const [uploadStage, setUploadStage] = useState(''),
+    [elapsed, setElapsed] = useState(0),
+    [agentEvent, setAgentEvent] = useState('');
   const [config, setConfig] = useState<{ mode: string; available: boolean } | null>(null);
   const [file, setFile] = useState<File | null>(null),
     [preview, setPreview] = useState(''),
@@ -97,14 +167,17 @@ export function Workspace() {
       await fn();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Falha ao executar a operação.');
+      setDiagnostic((e as { diagnostic?: Diagnostic }).diagnostic ?? null);
       setAuto(false);
     } finally {
+      setUploadStage('');
       setBusy(false);
       inFlight.current = false;
     }
   }, []);
   const apply = useCallback((v: CaseView) => {
     setView(v);
+    if (v.diagnostic) setDiagnostic(v.diagnostic);
     if (v.caseId !== selectedCase.current) {
       selectedCase.current = v.caseId;
       setSeeds(v.analysis.seeds.map((s) => s.id));
@@ -117,6 +190,46 @@ export function Workspace() {
       reviewedKey.current = v.caseId + v.phase;
     }
   }, []);
+  useEffect(() => {
+    if (!busy) return;
+    const started = Date.now();
+    setElapsed(0);
+    const timer = setInterval(() => setElapsed(Math.floor((Date.now() - started) / 1000)), 500);
+    return () => clearInterval(timer);
+  }, [busy]);
+  useEffect(() => {
+    if (
+      !view ||
+      closed ||
+      view.mode !== 'openai' ||
+      !['analyzing', 'researching', 'synthesizing'].includes(view.phase)
+    )
+      return;
+    const observer = new EventSource('/api/case/events');
+    observer.onmessage = (e) => {
+      try {
+        const event = JSON.parse(e.data);
+        const labels: Record<string, string> = {
+          'agent.session.turn.created': 'Turno criado',
+          'agent.session.turn.in_progress': 'Agente em execução',
+          'agent.session.turn.item.added': 'Nova atividade registrada pelo agente',
+          'agent.session.turn.completed': 'Turno concluído; recuperando resultado',
+          'agent.session.turn.failed': 'O agente relatou falha; recuperando diagnóstico',
+          'agent.session.idle': 'Sessão aguardando próxima etapa',
+          observer_unavailable: 'Eventos indisponíveis; acompanhamento por consultas continua',
+        };
+        setAgentEvent(labels[event.type] ?? 'Atualização recebida do agente');
+      } catch {
+        /* Only server-filtered lifecycle events are displayed. */
+      }
+    };
+    observer.onerror = () =>
+      setAgentEvent('Reconectando eventos; acompanhamento por consultas continua.');
+    return () => {
+      observer.close();
+      setAgentEvent('');
+    };
+  }, [view?.caseId, view?.phase, view?.mode, closed]);
   const poll = useCallback(async () => {
     const v = await request('/api/case');
     apply(v);
@@ -160,9 +273,12 @@ export function Workspace() {
       !['analyzing', 'researching', 'synthesizing', 'uncertain'].includes(view.phase)
     )
       return;
-    const timer = setTimeout(() => {
-      if (!inFlight.current) poll().catch((e) => setError(e.message));
-    }, 1200);
+    const timer = setTimeout(
+      () => {
+        if (!inFlight.current) poll().catch((e) => setError(e.message));
+      },
+      view.mode === 'openai' ? 2500 : 1200,
+    );
     return () => clearTimeout(timer);
   }, [view, closed, busy, poll]);
   const advance = useCallback(
@@ -226,11 +342,34 @@ export function Workspace() {
   }, [auto, view, closed, busy, act, advance]);
   async function start() {
     if (!file) throw new Error('Selecione uma foto.');
+    const requestId = crypto.randomUUID();
+    const started = Date.now();
+    setUploadStage('Validando tamanho, formato e dimensões no dispositivo…');
+    setDiagnostic(null);
+    try {
+      await preflightImage(file);
+    } catch (e) {
+      const error =
+        e instanceof AppError
+          ? e
+          : new AppError('IMAGE_READ', 'Não foi possível ler a foto no dispositivo.');
+      throw Object.assign(error, {
+        diagnostic: {
+          requestId,
+          stage: 'client_validation',
+          elapsedMs: Date.now() - started,
+          providerInvoked: false,
+          code: error.code,
+          ...error.details,
+        },
+      });
+    }
     const form = new FormData();
     form.set('image', file);
     form.set('context', context);
     form.set('consent', consent ? 'yes' : 'no');
-    await request('/api/cases', { method: 'POST', body: form });
+    setUploadStage('Enviando foto…');
+    await uploadCase(form, requestId, setUploadStage);
     setClosed(false);
     reviewedKey.current = '';
     await poll();
@@ -344,12 +483,48 @@ export function Workspace() {
             {notice}
           </div>
         )}
+        {uploadStage && (
+          <div className="notice" role="status" aria-live="polite">
+            {uploadStage} · {elapsed}s
+          </div>
+        )}
+        {diagnostic && (
+          <details className="panel">
+            <summary>Diagnóstico técnico · {diagnostic.requestId.slice(0, 8)}</summary>
+            <p>
+              Etapa: {diagnostic.stage} · {diagnostic.elapsedMs}ms · Provedor:{' '}
+              {diagnostic.providerInvoked === null
+                ? 'estado não confirmado'
+                : diagnostic.providerInvoked
+                  ? 'chamado'
+                  : 'não chamado'}
+            </p>
+            <pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+              {JSON.stringify(diagnostic, null, 2)}
+            </pre>
+            <button
+              className="secondary"
+              onClick={() => {
+                const url = URL.createObjectURL(
+                  new Blob([JSON.stringify(diagnostic, null, 2)], { type: 'application/json' }),
+                );
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `diagnostico-${diagnostic.requestId}.json`;
+                a.click();
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+              }}
+            >
+              Baixar diagnóstico
+            </button>
+          </details>
+        )}
         {!view || closed ? (
           <div className="entry-grid">
             <section className="panel upload-panel">
               <div className="panel-heading">
                 <span className="eyebrow">01 / PONTO DE PARTIDA</span>
-                <span className="muted">JPEG ou PNG · até 3 MiB</span>
+                <span className="muted">JPEG ou PNG · até 3 MiB · 16 MP</span>
               </div>
               <h2>Comece com uma única foto</h2>
               <label
@@ -480,6 +655,18 @@ export function Workspace() {
                 </button>
               </div>
             </section>
+            {(agentEvent || view.execution) && (
+              <div className="notice" role="status" aria-live="polite">
+                {agentEvent || 'Estado confirmado pelo servidor'}
+                {view.execution && (
+                  <span>
+                    {' '}
+                    · Sessão: {view.execution.sessionStatus} · Turno: {view.execution.turnStatus} ·
+                    Chamadas web: {view.execution.toolCalls}
+                  </span>
+                )}
+              </div>
+            )}
             <div className="metrics">
               <div>
                 <span>RECORTES</span>

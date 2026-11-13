@@ -27,6 +27,8 @@ import {
   type Snapshot,
 } from './provider';
 import { demoProvider } from './demo';
+import { logFailure, snapshotDiagnostic, withDiagnostics } from './diagnostics';
+import { normalizeProviderError, ProviderError } from './provider-error';
 
 const empty: AnalysisData = {
   evidence: [],
@@ -66,6 +68,7 @@ function selectProvider(): AgentsProvider {
   );
 }
 type Loaded = {
+  failure?: AppError;
   initial: InitialContext;
   analysis: AnalysisData;
   research: ResearchData | null;
@@ -78,15 +81,18 @@ export function createApi(
   providerFactory: () => AgentsProvider = selectProvider,
   now = () => Date.now(),
 ) {
-  return async function handle(
+  async function handle(
     req: Request,
-    endpoint: 'create' | 'get' | 'advance' | 'region' | 'cancel' | 'delete' | 'config',
+    endpoint: 'create' | 'get' | 'advance' | 'region' | 'cancel' | 'delete' | 'config' | 'events',
   ): Promise<Response> {
     let manifest: Manifest | null = null;
     try {
-      guard(req, !['get', 'config'].includes(endpoint));
+      guard(req, !['get', 'config', 'events'].includes(endpoint));
       if (endpoint === 'config')
         return jsonResponse({
+          revision: /^[a-f0-9]{40}$/i.test(process.env.VERCEL_GIT_COMMIT_SHA ?? '')
+            ? process.env.VERCEL_GIT_COMMIT_SHA
+            : 'local',
           mode: process.env.OPSEC_PROVIDER === 'demo' && !process.env.VERCEL ? 'demo' : 'openai',
           available:
             (process.env.OPSEC_PROVIDER === 'demo' && !process.env.VERCEL) ||
@@ -182,6 +188,45 @@ export function createApi(
           'O modo mudou desde a criação do caso. Retome com a configuração anterior para encerrar as sessões.',
           409,
         );
+      if (endpoint === 'events') {
+        const id = m.stage === 'research' ? m.researchId : m.visualId;
+        if (!id || !provider.events) return jsonResponse({ events: false }, 200);
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 20_000);
+        const signal = AbortSignal.any([req.signal, controller.signal]);
+        const encoder = new TextEncoder();
+        const stream = new ReadableStream({
+          async start(target) {
+            try {
+              for await (const event of provider.events!(id, signal)) {
+                if (signal.aborted) break;
+                target.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+              }
+            } catch {
+              if (!signal.aborted)
+                target.enqueue(encoder.encode('data: {"type":"observer_unavailable"}\n\n'));
+            } finally {
+              clearTimeout(timer);
+              try {
+                target.close();
+              } catch {
+                /* disconnected observer */
+              }
+            }
+          },
+          cancel() {
+            controller.abort();
+            clearTimeout(timer);
+          },
+        });
+        return new Response(stream, {
+          headers: {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-store',
+            'X-Accel-Buffering': 'no',
+          },
+        });
+      }
       if (endpoint === 'delete') {
         for (const id of [m.visualId, m.researchId].filter(Boolean) as string[]) {
           if (m.deletion[id] === 'deleted') continue;
@@ -199,7 +244,9 @@ export function createApi(
           }
         }
         const done = Object.values(m.deletion).every((s) => s === 'deleted');
-        const unknown = !m.visualId || (m.stage === 'research' && m.rounds > 0 && !m.researchId);
+        const unknown =
+          m.remoteCreationUnknown ??
+          (!m.visualId || (m.stage === 'research' && m.rounds > 0 && !m.researchId));
         return jsonResponse(
           {
             closed: done,
@@ -449,24 +496,33 @@ export function createApi(
       }
       return jsonResponse({ ...view(m, loaded, provider.model), report: null }, 202, m);
     } catch (e) {
-      const error =
-        e instanceof AppError
-          ? e
-          : new AppError(
-              'PROVIDER_FAILURE',
-              'A operação não foi confirmada. Consulte o estado do caso antes de tentar novamente.',
-              502,
-            );
+      const error = normalizeProviderError(e);
+      if (error instanceof ProviderError && error.definitive && manifest?.phase === 'uncertain') {
+        if (!manifest.visualId) manifest = null;
+        else {
+          manifest.remoteCreationUnknown = false;
+          manifest.phase = 'partial';
+          manifest.stopReason = 'provider_failure';
+        }
+      } else if (
+        manifest?.phase === 'uncertain' &&
+        (!manifest.visualId || (manifest.stage === 'research' && !manifest.researchId))
+      )
+        manifest.remoteCreationUnknown = true;
+      logFailure(error);
       return jsonResponse(
         {
           error: { code: error.code, message: error.message },
+          diagnostic: snapshotDiagnostic(error),
           uncertain: manifest?.phase === 'uncertain',
         },
         error.status,
         manifest,
       );
     }
-  };
+  }
+  return (req: Request, endpoint: Parameters<typeof handle>[1]) =>
+    withDiagnostics(req, endpoint, () => handle(req, endpoint));
 }
 
 async function load(p: AgentsProvider, m: Manifest): Promise<Loaded> {
@@ -482,6 +538,7 @@ async function load(p: AgentsProvider, m: Manifest): Promise<Loaded> {
   let search: Snapshot | null = null,
     research: ResearchData | null = null,
     error: string | null = null;
+  let failure = visual.failure;
   let analysis: AnalysisData = {
     ...empty,
     evidence: initial.image.metadata
@@ -524,7 +581,9 @@ async function load(p: AgentsProvider, m: Manifest): Promise<Loaded> {
           search.visitedUrls,
         );
       }
-    } catch {
+    } catch (cause) {
+      failure = normalizeProviderError(cause);
+      logFailure(failure);
       error =
         'A pesquisa não pôde ser validada/recuperada. Os resultados visuais permanecem disponíveis.';
       m.phase = 'partial';
@@ -562,7 +621,14 @@ async function load(p: AgentsProvider, m: Manifest): Promise<Loaded> {
       m.stopReason = 'policy_violation';
     }
   }
-  return { initial, analysis, research, synthesis, visual, search, error };
+  if (search?.failure) failure = search.failure;
+  if (failure) {
+    error = failure.message;
+    m.phase = 'partial';
+    m.stopReason = 'provider_failure';
+    logFailure(failure);
+  }
+  return { initial, analysis, research, synthesis, visual, search, error, failure };
 }
 function reconcile(m: Manifest, l: Loaded, now: number) {
   if (
@@ -641,7 +707,8 @@ async function submit(p: AgentsProvider, m: Manifest, req: ProviderRequest) {
         : req.stage === 'synthesis'
           ? 'synthesizing'
           : 'analyzing';
-  } catch {
+  } catch (error) {
+    if (error instanceof ProviderError) throw error;
     throw new AppError(
       'ACTION_UNCERTAIN',
       'O provedor não confirmou a operação. Acompanhe o estado; não haverá reenvio automático.',
@@ -681,6 +748,13 @@ function view(m: Manifest, l: Loaded, model: string): CaseView {
       )
     : null;
   return {
+    diagnostic: snapshotDiagnostic(l.failure),
+    execution: {
+      sessionStatus: (m.stage === 'research' ? l.search : l.visual)?.status ?? 'unknown',
+      turnStatus: (m.stage === 'research' ? l.search : l.visual)?.turnStatus ?? 'unknown',
+      toolCalls: l.search?.toolCalls ?? 0,
+      checkedAt: new Date().toISOString(),
+    },
     caseId: m.caseId,
     mode: m.provider,
     phase: m.phase,

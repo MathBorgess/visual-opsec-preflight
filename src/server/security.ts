@@ -1,6 +1,7 @@
 import 'server-only';
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { AppError, LIMITS, type Manifest } from '@/lib/contracts';
+import { snapshotDiagnostic } from './diagnostics';
 
 const globals = globalThis as typeof globalThis & { __opsecSigning?: string };
 function signingKey() {
@@ -99,11 +100,30 @@ export function jsonResponse(value: unknown, status = 200, m?: Manifest | null, 
       'Set-Cookie',
       `opsec_case=${signManifest(m)}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${Math.max(0, Math.floor((m.expiresAt - Date.now()) / 1000))}${process.env.VERCEL ? '; Secure' : ''}`,
     );
-  return new Response(JSON.stringify(value), { status, headers });
+  const diagnostic = snapshotDiagnostic();
+  return new Response(
+    JSON.stringify(
+      value && typeof value === 'object' && !Array.isArray(value)
+        ? { ...(diagnostic ? { diagnostic } : {}), ...value }
+        : value,
+    ),
+    { status, headers },
+  );
 }
 export async function boundedBody(req: Request, max = LIMITS.body): Promise<Buffer> {
   if (Number(req.headers.get('content-length') ?? 0) > max)
-    throw new AppError('BODY_TOO_LARGE', 'Solicitação excede o tamanho permitido.', 413);
+    throw new AppError(
+      'BODY_TOO_LARGE',
+      'O envio excede o limite do formulário. Selecione uma foto de até 3 MiB.',
+      413,
+      {
+        bounds: {
+          name: 'bodyBytes',
+          actual: Number(req.headers.get('content-length')),
+          maximum: max,
+        },
+      },
+    );
   const reader = req.body?.getReader();
   if (!reader) return Buffer.alloc(0);
   const chunks: Uint8Array[] = [];
@@ -114,7 +134,12 @@ export async function boundedBody(req: Request, max = LIMITS.body): Promise<Buff
     size += part.value.byteLength;
     if (size > max) {
       await reader.cancel();
-      throw new AppError('BODY_TOO_LARGE', 'Solicitação excede o tamanho permitido.', 413);
+      throw new AppError(
+        'BODY_TOO_LARGE',
+        'O envio excede o limite do formulário. Selecione uma foto de até 3 MiB.',
+        413,
+        { bounds: { name: 'bodyBytes', actual: size, maximum: max } },
+      );
     }
     chunks.push(part.value);
   }

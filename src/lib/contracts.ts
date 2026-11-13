@@ -5,6 +5,7 @@ export const LIMITS = {
   body: 3.5 * 1024 ** 2,
   pixels: 16_000_000,
   derivative: 700 * 1024,
+  imageUrlChars: 1_048_576,
   crops: 3,
   rounds: 2,
   questions: 5,
@@ -193,6 +194,7 @@ export type Manifest = {
   caseId: string;
   visualId: string;
   researchId: string | null;
+  remoteCreationUnknown?: boolean;
   provider: 'demo' | 'openai';
   phase: Phase;
   stage: Stage;
@@ -254,6 +256,8 @@ export type Report = {
   method: { model: string; promptVersion: '1'; imageProcessor: string; sourceCatalog: string[] };
 };
 export type CaseView = {
+  diagnostic?: Diagnostic;
+  execution?: { sessionStatus: string; turnStatus: string; toolCalls: number; checkedAt: string };
   caseId: string;
   mode: 'demo' | 'openai';
   phase: Phase;
@@ -274,10 +278,34 @@ export class AppError extends Error {
     public code: string,
     public message: string,
     public status = 400,
+    public details?: {
+      bounds?: { name: string; actual: number; maximum: number; width?: number; height?: number };
+      provider?: ProviderDiagnostic;
+      retryable?: boolean;
+    },
   ) {
     super(message);
   }
 }
+export type ProviderDiagnostic = {
+  status?: number;
+  code?: string;
+  param?: string;
+  requestId?: string;
+  sessionId?: string;
+  turnId?: string;
+  retryAfterSeconds?: number;
+};
+export type Diagnostic = {
+  requestId: string;
+  stage: string;
+  elapsedMs: number;
+  providerInvoked: boolean | null;
+  code?: string;
+  bounds?: NonNullable<AppError['details']>['bounds'];
+  provider?: ProviderDiagnostic;
+  retryable?: boolean;
+};
 export function validBox(box: BoxData) {
   return (
     box.every(Number.isFinite) && box[0] + box[2] <= 1.00000001 && box[1] + box[3] <= 1.00000001
