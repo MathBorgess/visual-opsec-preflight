@@ -5,7 +5,7 @@ import { createApi } from '@/server/api';
 import { DemoProvider } from '@/server/demo';
 import { readManifest, signManifest } from '@/server/security';
 import { reportMarkdown } from '@/lib/report';
-import { Analysis, LIMITS, type CaseView, type Manifest } from '@/lib/contracts';
+import { Analysis, AppError, LIMITS, type CaseView, type Manifest } from '@/lib/contracts';
 import type { ProviderRequest, Snapshot } from '@/server/provider';
 import { ProviderError } from '@/server/provider-error';
 
@@ -528,6 +528,80 @@ describe('API do caso — jornada e fronteiras', () => {
       info.mockRestore();
       error.mockRestore();
     }
+  });
+  it.each(['analysis', 'research'])(
+    'histórico pendente de %s mantém a sessão e retoma sem reenviar',
+    async (stage) => {
+      class DelayedHistory extends DemoProvider {
+        pendingId = '';
+        remaining = 0;
+        async start(r: ProviderRequest) {
+          const id = await super.start(r);
+          if (r.stage === stage) {
+            this.pendingId = id;
+            this.remaining = 1;
+          }
+          return id;
+        }
+        async read(id: string) {
+          if (id === this.pendingId && this.remaining-- > 0)
+            throw new AppError('CONTEXT_PENDING', 'Aguardando histórico.', 503, {
+              retryable: true,
+            });
+          return super.read(id);
+        }
+      }
+      const h = harness(new DelayedHistory());
+      await h.call('create', form());
+      if (stage === 'research') {
+        await h.call('get');
+        await h.call('advance', { action: 'finish_visual' });
+        await h.call('advance', { action: 'search', seedIds: ['S1'] });
+      }
+      const before = h.provider.calls.length;
+      const pending = await h.call('get');
+      expect(pending.status).toBe(202);
+      expect(pending.data).toMatchObject({
+        pending: true,
+        phase: stage === 'analysis' ? 'analyzing' : 'researching',
+      });
+      const ready = await h.call('get');
+      expect(ready.status).toBe(200);
+      expect(ready.data.phase).not.toBe('partial');
+      expect(h.provider.calls).toHaveLength(before);
+    },
+  );
+  it('histórico pendente respeita o prazo e solicita cancelamento sem recriar sessão', async () => {
+    class Pending extends DemoProvider {
+      async read(): Promise<never> {
+        throw new AppError('CONTEXT_PENDING', 'Aguardando.', 503);
+      }
+    }
+    let clock = Date.now();
+    const provider = new Pending();
+    const cancel = vi.spyOn(provider, 'cancel');
+    const h = harness(provider, () => clock);
+    await h.call('create', form());
+    clock += LIMITS.activeMs + 1;
+    const ended = await h.call('get');
+    expect(ended.status).toBe(502);
+    expect(ended.data.error.code).toBe('CONTEXT_TIMEOUT');
+    expect(cancel).toHaveBeenCalledTimes(1);
+    expect(provider.calls).toHaveLength(1);
+  });
+  it('encerra sessão conhecida mesmo antes de o histórico inicial estar disponível', async () => {
+    class Pending extends DemoProvider {
+      async read(): Promise<never> {
+        throw new AppError('CONTEXT_PENDING', 'Aguardando.', 503);
+      }
+    }
+    const provider = new Pending();
+    const cancel = vi.spyOn(provider, 'cancel');
+    const h = harness(provider);
+    await h.call('create', form());
+    const ended = await h.call('delete');
+    expect(ended.data.remoteDeletionConfirmed).toBe(true);
+    expect(cancel).toHaveBeenCalledTimes(1);
   });
   it('resposta visual malformada mantém inventário e encerra com documento parcial', async () => {
     class Malformed extends DemoProvider {

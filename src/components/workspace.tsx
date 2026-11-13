@@ -1,6 +1,12 @@
 'use client';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AppError, type CaseView, type Diagnostic, type Report } from '@/lib/contracts';
+import {
+  AppError,
+  type CaseView,
+  type PendingCaseView,
+  type Diagnostic,
+  type Report,
+} from '@/lib/contracts';
 import { preflightImage } from '@/lib/upload';
 import { minimizeReport, reportMarkdown } from '@/lib/report';
 import { safeUrl } from '@/lib/policy';
@@ -135,6 +141,7 @@ function download(report: Report, format: 'json' | 'md') {
 }
 
 export function Workspace() {
+  const [pendingCase, setPendingCase] = useState<{ phase: string } | null>(null);
   const [diagnostic, setDiagnostic] = useState<Diagnostic | null>(null);
   const [uploadStage, setUploadStage] = useState(''),
     [elapsed, setElapsed] = useState(0),
@@ -175,7 +182,13 @@ export function Workspace() {
       inFlight.current = false;
     }
   }, []);
-  const apply = useCallback((v: CaseView) => {
+  const apply = useCallback((v: CaseView | PendingCaseView) => {
+    if ('pending' in v) {
+      setPendingCase({ phase: v.phase });
+      if (v.diagnostic) setDiagnostic(v.diagnostic);
+      return;
+    }
+    setPendingCase(null);
     setView(v);
     if (v.diagnostic) setDiagnostic(v.diagnostic);
     if (v.caseId !== selectedCase.current) {
@@ -199,10 +212,12 @@ export function Workspace() {
   }, [busy]);
   useEffect(() => {
     if (
-      !view ||
+      (!view && !pendingCase) ||
       closed ||
-      view.mode !== 'openai' ||
-      !['analyzing', 'researching', 'synthesizing'].includes(view.phase)
+      (view?.mode ?? config?.mode) !== 'openai' ||
+      !['analyzing', 'researching', 'synthesizing'].includes(
+        pendingCase?.phase ?? view?.phase ?? '',
+      )
     )
       return;
     const observer = new EventSource('/api/case/events');
@@ -229,7 +244,7 @@ export function Workspace() {
       observer.close();
       setAgentEvent('');
     };
-  }, [view?.caseId, view?.phase, view?.mode, closed]);
+  }, [view?.caseId, view?.phase, view?.mode, pendingCase?.phase, config?.mode, closed]);
   const poll = useCallback(async () => {
     const v = await request('/api/case');
     apply(v);
@@ -268,19 +283,25 @@ export function Workspace() {
   }, [file]);
   useEffect(() => {
     if (
-      !view ||
+      (!view && !pendingCase) ||
       closed ||
-      !['analyzing', 'researching', 'synthesizing', 'uncertain'].includes(view.phase)
+      (!pendingCase &&
+        !['analyzing', 'researching', 'synthesizing', 'uncertain'].includes(view!.phase))
     )
       return;
     const timer = setTimeout(
       () => {
-        if (!inFlight.current) poll().catch((e) => setError(e.message));
+        if (!inFlight.current)
+          poll().catch((e) => {
+            setError(e.message);
+            setDiagnostic(e.diagnostic ?? null);
+            setPendingCase(null);
+          });
       },
-      view.mode === 'openai' ? 2500 : 1200,
+      (view?.mode ?? config?.mode) === 'openai' ? 2500 : 1200,
     );
     return () => clearTimeout(timer);
-  }, [view, closed, busy, poll]);
+  }, [view, pendingCase, config?.mode, closed, busy, poll]);
   const advance = useCallback(
     async (action: string, extra = {}) => {
       const v = await request('/api/case/advance', {
@@ -370,6 +391,8 @@ export function Workspace() {
     form.set('consent', consent ? 'yes' : 'no');
     setUploadStage('Enviando foto…');
     await uploadCase(form, requestId, setUploadStage);
+    setPendingCase({ phase: 'analyzing' });
+    setUploadStage('Sessão aceita. Aguardando os registros iniciais do agente…');
     setClosed(false);
     reviewedKey.current = '';
     await poll();
@@ -384,20 +407,22 @@ export function Workspace() {
     setNotice(r.message);
     if (r.closed) {
       setClosed(true);
+      setPendingCase(null);
       setView(null);
       setReviewed(null);
       setRecovery(false);
       selectedCase.current = '';
     }
   }
+  const progressPhase = pendingCase?.phase ?? view?.phase;
   const currentStep =
-    !view || closed
+    !progressPhase || closed
       ? 0
-      : ['analyzing', 'exploring'].includes(view.phase)
+      : ['analyzing', 'exploring'].includes(progressPhase)
         ? 1
-        : view.phase === 'awaiting_search_review'
+        : progressPhase === 'awaiting_search_review'
           ? 2
-          : ['researching', 'research_ready'].includes(view.phase)
+          : ['researching', 'research_ready'].includes(progressPhase)
             ? 3
             : 4;
   const steps = [
@@ -488,6 +513,15 @@ export function Workspace() {
             {uploadStage} · {elapsed}s
           </div>
         )}
+        {pendingCase && !uploadStage && (
+          <div className="notice" role="status" aria-live="polite">
+            Sessão aceita. Aguardando registros iniciais do agente; acompanhamento automático ativo.
+            {agentEvent && <span> {agentEvent}.</span>}
+            <button className="text-button" onClick={() => act(closeCase)} disabled={busy}>
+              Encerrar e excluir sessão pendente
+            </button>
+          </div>
+        )}
         {diagnostic && (
           <details className="panel">
             <summary>Diagnóstico técnico · {diagnostic.requestId.slice(0, 8)}</summary>
@@ -519,7 +553,7 @@ export function Workspace() {
             </button>
           </details>
         )}
-        {!view || closed ? (
+        {pendingCase && !view ? null : !view || closed ? (
           <div className="entry-grid">
             <section className="panel upload-panel">
               <div className="panel-heading">
@@ -584,7 +618,9 @@ export function Workspace() {
               <button
                 className="primary"
                 onClick={() => act(start)}
-                disabled={recovery || !file || !consent || busy || !config?.available}
+                disabled={
+                  recovery || !!pendingCase || !file || !consent || busy || !config?.available
+                }
               >
                 {busy
                   ? 'Preparando o caso…'

@@ -255,6 +255,13 @@ export type Report = {
   };
   method: { model: string; promptVersion: '1'; imageProcessor: string; sourceCatalog: string[] };
 };
+export type PendingCaseView = {
+  pending: true;
+  caseId: string;
+  mode: 'demo' | 'openai';
+  phase: string;
+  diagnostic?: Diagnostic;
+};
 export type CaseView = {
   diagnostic?: Diagnostic;
   execution?: { sessionStatus: string; turnStatus: string; toolCalls: number; checkedAt: string };

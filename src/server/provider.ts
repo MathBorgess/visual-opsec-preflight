@@ -242,6 +242,24 @@ export class OpenAIAgentsProvider implements AgentsProvider {
         }
       }
       const initial = requests[0];
+      if (!initial && (session.status === 'failed' || turn?.status === 'failed'))
+        throw savedProviderError(
+          turn?.error ?? session.error ?? { code: 'unknown' },
+          id,
+          turn?.id,
+        )!;
+      if (
+        !initial &&
+        !items.some((item) => item.type === 'message' && item.role === 'user') &&
+        session.status !== 'failed' &&
+        turn?.status !== 'failed'
+      )
+        throw new AppError(
+          'CONTEXT_PENDING',
+          'Sessão aceita; aguardando o registro do histórico inicial.',
+          503,
+          { retryable: true },
+        );
       if (!initial)
         throw new AppError(
           'MISSING_CONTEXT',
