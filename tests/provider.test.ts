@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import OpenAI from 'openai';
 import { OpenAIAgentsProvider } from '@/server/provider';
-import { ProviderError } from '@/server/provider-error';
+import { ProviderError, summarizeProviderMessage } from '@/server/provider-error';
 import { demoAnalysis } from '@/server/demo';
 import { validateResearch } from '@/lib/policy';
 import type { InitialContext, ResearchData } from '@/lib/contracts';
@@ -16,6 +16,17 @@ const initial = {
 const analysis = demoAnalysis(initial);
 
 describe('adaptador Agents API — SDK real com HTTP controlado', () => {
+  it('resume somente vocabulário técnico e remove dados ecoados pelo provedor', () => {
+    const summary = summarizeProviderMessage(
+      'The request body is too large: 4194304 owner@example.invalid PRIVATE_CONTEXT sk-fictitiousSecret12345678901234567890',
+    );
+    expect(summary).toContain('The request body is too large');
+    expect(summarizeProviderMessage('Invalid value: "The project has no billing"')).not.toContain(
+      'billing',
+    );
+    for (const value of ['4194304', 'owner', 'example', 'PRIVATE', 'fictitious'])
+      expect(summary).not.toContain(value);
+  });
   it.each([
     [400, 'invalid_request_error', 'OPENAI_INVALID_REQUEST', false],
     [401, 'invalid_api_key', 'OPENAI_AUTHENTICATION', false],

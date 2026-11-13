@@ -32,6 +32,12 @@ export function snapshotDiagnostic(error?: AppError): Diagnostic | undefined {
       }
     : undefined;
 }
+function logDiagnostic(error?: AppError) {
+  const diagnostic = snapshotDiagnostic(error);
+  if (!diagnostic?.provider) return diagnostic;
+  const { summary: _summary, ...provider } = diagnostic.provider;
+  return { ...diagnostic, provider };
+}
 export function diagnosticEvent(stage: string, measurements?: Record<string, number>) {
   const c = context.getStore();
   if (!c) return;
@@ -40,7 +46,7 @@ export function diagnosticEvent(stage: string, measurements?: Record<string, num
   console.info(
     JSON.stringify({
       event: 'opsec.stage',
-      ...snapshotDiagnostic(),
+      ...logDiagnostic(),
       ...(measurements ? { measurements } : {}),
     }),
   );
@@ -73,7 +79,7 @@ export function withDiagnostics(req: Request, endpoint: string, fn: () => Promis
       console.info(
         JSON.stringify({
           event: 'opsec.response',
-          ...snapshotDiagnostic(),
+          ...logDiagnostic(),
           status: response.status,
         }),
       );
@@ -82,5 +88,5 @@ export function withDiagnostics(req: Request, endpoint: string, fn: () => Promis
   );
 }
 export function logFailure(error: AppError) {
-  console.error(JSON.stringify({ event: 'opsec.failure', ...snapshotDiagnostic(error) }));
+  console.error(JSON.stringify({ event: 'opsec.failure', ...logDiagnostic(error) }));
 }

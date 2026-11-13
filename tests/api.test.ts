@@ -506,6 +506,29 @@ describe('API do caso — jornada e fronteiras', () => {
     expect(closed.data).toMatchObject({ closed: true, remoteDeletionConfirmed: false });
     expect(closed.data.message).toContain('sem ID confirmado');
   });
+  it('resumo de rejeição fica na resposta autenticada e nunca entra nos logs de runtime', async () => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => {});
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      class Rejected extends DemoProvider {
+        async start(): Promise<string> {
+          throw new ProviderError('OPENAI_INVALID_REQUEST', 'Rejeitado.', 502, true, {
+            summary: 'PRIVATE_ECHO',
+            status: 400,
+          });
+        }
+      }
+      const h = harness(new Rejected());
+      const result = await h.call('create', form());
+      expect(result.data.diagnostic.provider.summary).toBe('PRIVATE_ECHO');
+      expect([...info.mock.calls, ...error.mock.calls].flat().join(' ')).not.toContain(
+        'PRIVATE_ECHO',
+      );
+    } finally {
+      info.mockRestore();
+      error.mockRestore();
+    }
+  });
   it('resposta visual malformada mantém inventário e encerra com documento parcial', async () => {
     class Malformed extends DemoProvider {
       async read(id: string) {

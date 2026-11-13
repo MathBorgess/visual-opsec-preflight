@@ -288,6 +288,7 @@ export class AppError extends Error {
   }
 }
 export type ProviderDiagnostic = {
+  summary?: string;
   hints?: string[];
   status?: number;
   code?: string;

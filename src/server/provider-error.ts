@@ -15,6 +15,27 @@ export class ProviderError extends AppError {
     super(code, message, status, { provider, retryable });
   }
 }
+// A protocol vocabulary, never a copy of arbitrary message text or request values.
+// Unknown words, identifiers and every number are replaced, including echoed input.
+const protocolWords = new Set(
+  `a an the and or of to for from in on at with without is are was be must should can cannot not no only as than this that it its has have does do
+invalid bad request error expected received provided supplied required missing unsupported unknown unrecognized unexpected exceeded exceeds exceed maximum minimum max min too many much few large long small short empty valid allowed supported enabled disabled enable disable use using used value values field fields parameter parameters argument arguments property properties length size bytes characters character count total combined limit limits constraint constraints
+agent agents session sessions turn turns model models input output content text image images image_url input_image input_text role user system assistant developer type string array object boolean number integer null schema prefixitems items additionalproperties required anyof oneof properties format json_schema metadata instructions configuration environment none openai_hosted self_hosted multi_agent tools tool web_search stream streaming beta header headers authentication permission permissions project organization quota billing tokens token context body payload data url urls base64 inline message messages detail details validation union discriminator dictionary literal failed failure unexpected endpoint`.split(
+    /\s+/,
+  ),
+);
+export function summarizeProviderMessage(message: string) {
+  return (
+    message
+      .slice(0, 2000)
+      .replace(/"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`/g, '[valor]')
+      .match(/[A-Za-z_][A-Za-z0-9_.\[\]-]*|\d+|[,:;()]/g) ?? []
+  )
+    .map((word) => (protocolWords.has(word.toLowerCase()) ? word : '[valor]'))
+    .join(' ')
+    .replace(/(?:\[valor\] ){2,}/g, '[valor] ')
+    .slice(0, 800);
+}
 export function normalizeProviderError(error: unknown): AppError {
   if (error instanceof AppError) return error;
   if (error instanceof OpenAI.APIError) {
@@ -33,6 +54,7 @@ export function normalizeProviderError(error: unknown): AppError {
       'quota',
     ].filter((term) => new RegExp(`\\b${term}\\b`, 'i').test(error.message));
     const provider = {
+      ...(status === 400 ? { summary: summarizeProviderMessage(error.message) } : {}),
       ...(hints.length ? { hints } : {}),
       status,
       code,
