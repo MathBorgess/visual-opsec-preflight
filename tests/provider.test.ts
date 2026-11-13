@@ -21,6 +21,9 @@ describe('adaptador Agents API — SDK real com HTTP controlado', () => {
       'The request body is too large: 4194304 owner@example.invalid PRIVATE_CONTEXT sk-fictitiousSecret12345678901234567890',
     );
     expect(summary).toContain('The request body is too large');
+    expect(summarizeProviderMessage('Invalid value: "The project has no billing"')).not.toContain(
+      'billing',
+    );
     for (const value of ['4194304', 'owner', 'example', 'PRIVATE', 'fictitious'])
       expect(summary).not.toContain(value);
   });

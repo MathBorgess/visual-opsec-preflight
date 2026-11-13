@@ -25,7 +25,12 @@ agent agents session sessions turn turns model models input output content text 
   ),
 );
 export function summarizeProviderMessage(message: string) {
-  return (message.slice(0, 2000).match(/[A-Za-z_][A-Za-z0-9_.\[\]-]*|\d+|[,:;()]/g) ?? [])
+  return (
+    message
+      .slice(0, 2000)
+      .replace(/"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`/g, '[valor]')
+      .match(/[A-Za-z_][A-Za-z0-9_.\[\]-]*|\d+|[,:;()]/g) ?? []
+  )
     .map((word) => (protocolWords.has(word.toLowerCase()) ? word : '[valor]'))
     .join(' ')
     .replace(/(?:\[valor\] ){2,}/g, '[valor] ')
