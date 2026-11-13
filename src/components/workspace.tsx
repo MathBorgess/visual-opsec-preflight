@@ -13,6 +13,7 @@ import { preflightImage } from '@/lib/upload';
 import { minimizeReport, reportMarkdown } from '@/lib/report';
 import { safeUrl } from '@/lib/policy';
 import {
+  attributedIdentityData,
   breadthLabels,
   categoryLabels,
   dataClassLabels,
@@ -487,6 +488,7 @@ export function Workspace() {
       selectedCase.current = '';
     }
   }
+  const identityAttribution = attributedIdentityData(view?.research ?? null);
   const progressPhase = pendingCase?.phase ?? view?.phase;
   const currentStep =
     !progressPhase || closed
@@ -911,15 +913,13 @@ export function Workspace() {
                   IDENTIDADE AUTORIZADA · {relationLabels[view.identity.relation].toUpperCase()}
                 </p>
                 <h3 id="identity-heading">{view.identity.name}</h3>
-                {view.research?.discovered?.some((d) => d.match === 'declared_identity') ? (
+                {identityAttribution.discovered.length ? (
                   <ul className="chips" aria-label="Descoberto a partir do nome">
-                    {view.research.discovered
-                      .filter((d) => d.match === 'declared_identity')
-                      .map((d) => (
-                        <li key={d.facet + d.value}>
-                          {facetLabels[d.facet]}: {d.value} · {d.sourceIds.join(', ')}
-                        </li>
-                      ))}
+                    {identityAttribution.discovered.map((d) => (
+                      <li key={d.facet + d.value}>
+                        {facetLabels[d.facet]}: {d.value} · {d.sourceIds.join(', ')}
+                      </li>
+                    ))}
                   </ul>
                 ) : (
                   <p>
@@ -933,7 +933,7 @@ export function Workspace() {
                   Declarada por você, não reconhecida pelo rosto. A pesquisa mede o que fontes
                   públicas associam a este nome
                   {view.research
-                    ? `: ${view.research.sources.filter((s) => s.exposure?.match === 'declared_identity').length} fonte(s) atribuída(s) até agora.`
+                    ? `: ${identityAttribution.sources.length} fonte(s) atribuída(s) até agora.`
                     : '.'}
                 </p>
                 {view.analysis.subjects && (

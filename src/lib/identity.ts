@@ -271,6 +271,22 @@ export function attachIdentity(
   };
 }
 
+/** Shared presentation data: unavailable pages and homonyms cannot support an attribution. */
+export function attributedIdentityData(research: ResearchData | null) {
+  const sources = (research?.sources ?? []).filter(
+    (s) => s.exposure?.match === 'declared_identity' && s.retrievalState !== 'unavailable',
+  );
+  const sourceIds = new Set(sources.map((s) => s.id));
+  const discovered = (research?.discovered ?? [])
+    .filter((d) => d.match === 'declared_identity' && d.sourceIds.some((id) => sourceIds.has(id)))
+    .map((d) => ({
+      facet: d.facet,
+      value: d.value,
+      sourceIds: d.sourceIds.filter((id) => sourceIds.has(id)),
+    }));
+  return { sources, discovered };
+}
+
 export function identityExposure(
   identity: DeclaredIdentityData | null,
   seeds: SeedData[],
@@ -291,20 +307,12 @@ export function identityExposure(
   const relevant = (research?.sources ?? []).filter(
     (s) => s.exposure && s.retrievalState !== 'unavailable',
   );
-  const attributed = relevant.filter((s) => s.exposure!.match === 'declared_identity');
+  const attributedData = attributedIdentityData(research);
+  const attributed = attributedData.sources;
   const homonyms = relevant.filter((s) => s.exposure!.match === 'possible_homonym');
   // A discovery counts only when an attributed source supports it.
-  const attributedIds = new Set(attributed.map((s) => s.id));
   const allDiscoveries = state === 'executed' ? (research?.discovered ?? []) : [];
-  const discovered = allDiscoveries
-    .filter(
-      (d) => d.match === 'declared_identity' && d.sourceIds.some((id) => attributedIds.has(id)),
-    )
-    .map((d) => ({
-      facet: d.facet,
-      value: d.value,
-      sourceIds: d.sourceIds.filter((id) => attributedIds.has(id)),
-    }));
+  const discovered = state === 'executed' ? attributedData.discovered : [];
   const group = <K extends string>(keys: (s: (typeof attributed)[number]) => K[]) => {
     const map = new Map<K, string[]>();
     for (const s of attributed)

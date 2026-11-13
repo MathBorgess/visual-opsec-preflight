@@ -1,5 +1,71 @@
 import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
+import { prepareCase } from './case-entry';
+import type { CaseView } from '../src/lib/contracts';
+
+test('cartão ignora descobertas de homônimos e páginas indisponíveis, preservando apenas referências atribuíveis', async ({
+  page,
+}) => {
+  await page.route('**/api/case', async (route) => {
+    if (route.request().method() !== 'GET') return route.continue();
+    const response = await route.fetch();
+    if (!response.ok()) return route.fulfill({ response });
+    const data = (await response.json()) as CaseView;
+    if (data.research) {
+      const supporting = data.research.sources.find(
+        (s) => s.exposure?.match === 'declared_identity' && s.retrievalState !== 'unavailable',
+      );
+      if (supporting?.exposure) {
+        data.research.sources.push(
+          {
+            ...supporting,
+            id: 'W_UI_HOMONYM',
+            exposure: { ...supporting.exposure, match: 'possible_homonym' },
+          },
+          { ...supporting, id: 'W_UI_UNAVAILABLE', retrievalState: 'unavailable' },
+        );
+        data.research.discovered = [
+          ...(data.research.discovered ?? []),
+          {
+            facet: 'employer',
+            value: 'Empresa somente do homônimo',
+            sourceIds: ['W_UI_HOMONYM'],
+            match: 'declared_identity',
+          },
+          {
+            facet: 'profession',
+            value: 'Profissão sem página disponível',
+            sourceIds: ['W_UI_UNAVAILABLE'],
+            match: 'declared_identity',
+          },
+          {
+            facet: 'education',
+            value: 'Formação com fonte atribuível',
+            sourceIds: [supporting.id, 'W_UI_HOMONYM', 'W_UI_UNAVAILABLE'],
+            match: 'declared_identity',
+          },
+        ];
+      }
+    }
+    await route.fulfill({ response, json: data });
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Usar imagem sintética de exemplo' }).click();
+  await prepareCase(page);
+  await page.getByRole('button', { name: 'Iniciar simulação' }).click();
+  await expect(page.getByRole('heading', { name: 'Seu dossiê, com limites claros.' })).toBeVisible({
+    timeout: 30000,
+  });
+  const card = page.locator('.identity-card');
+  await expect(card.getByRole('list', { name: 'Descoberto a partir do nome' })).toContainText(
+    'Formação com fonte atribuível',
+  );
+  await expect(card).not.toContainText('Empresa somente do homônimo');
+  await expect(card).not.toContainText('Profissão sem página disponível');
+  await expect(card).not.toContainText('W_UI_HOMONYM');
+  await expect(card).not.toContainText('W_UI_UNAVAILABLE');
+  await page.getByRole('button', { name: 'Encerrar e excluir sessões' }).click();
+});
 
 test('fluxo principal com identidade: foto + nome + autorizações → exposição no dossiê', async ({
   page,

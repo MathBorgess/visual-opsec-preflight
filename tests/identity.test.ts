@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  attributedIdentityData,
   attachIdentity,
   identityExposure,
   identitySeeds,
@@ -54,6 +55,53 @@ function source(id: string, seedId: string, extra: Partial<SourceData> = {}): So
 }
 
 describe('identidade declarada com autorização', () => {
+  it('cartão e dossiê atribuem descobertas somente a fontes disponíveis da identidade', () => {
+    const attributed = {
+      category: 'professional_profile' as const,
+      dataClasses: ['role' as const],
+      match: 'declared_identity' as const,
+    };
+    const research: ResearchData = {
+      sources: [
+        source('W1', 'PID1', { exposure: attributed }),
+        source('W2', 'PID1', { exposure: { ...attributed, match: 'possible_homonym' } }),
+        source('W3', 'PID1', { exposure: attributed, retrievalState: 'unavailable' }),
+      ],
+      findings: [],
+      limitations: [],
+      followup: null,
+      discovered: [
+        { facet: 'profession', value: 'Engenheira', sourceIds: ['W1'], match: 'declared_identity' },
+        {
+          facet: 'employer',
+          value: 'Organização de homônimo',
+          sourceIds: ['W2'],
+          match: 'declared_identity',
+        },
+        {
+          facet: 'activity',
+          value: 'Atividade indisponível',
+          sourceIds: ['W3'],
+          match: 'declared_identity',
+        },
+        {
+          facet: 'education',
+          value: 'Formação com apoio misto',
+          sourceIds: ['W1', 'W2', 'W3'],
+          match: 'declared_identity',
+        },
+      ],
+    };
+    const card = attributedIdentityData(research);
+    const report = identityExposure(identity, analysis.seeds, research, ['PID1'], 1);
+    expect(card.sources.map((s) => s.id)).toEqual(['W1']);
+    expect(card.discovered).toEqual([
+      { facet: 'profession', value: 'Engenheira', sourceIds: ['W1'] },
+      { facet: 'education', value: 'Formação com apoio misto', sourceIds: ['W1'] },
+    ]);
+    expect(card.discovered).toEqual(report.discovered);
+    expect(report.homonymDiscoveries).toBe(2);
+  });
   it('normaliza campos, remove atividades repetidas e registra a autorização', () => {
     expect(identity).toEqual({
       relation: 'self',
