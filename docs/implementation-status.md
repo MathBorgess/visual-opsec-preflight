@@ -43,6 +43,6 @@ A heurística de ganho compara evidências/perguntas e conteúdo/estados da pesq
 
 O limite de 180s considera turnos concluídos e tempo pendente observado por polling. A espera do autor na revisão não conta. O controlador para novas explorações e pode iniciar síntese; exclusão é separada. Sem banco, concorrência/replay não oferecem orçamento global rígido.
 
-Verificação final local: TypeScript sem erros, 27 testes passando e jornada Playwright sobre o build de produção passando. Inspeção do bundle estático não encontrou os nomes das secrets do servidor, a credencial fictícia do teste ou o marcador de contexto privado das fixtures. Isso não substitui a verificação com a configuração real.
+Verificação local: TypeScript sem erros, 27 testes passando e três cenários Playwright sobre o build de produção: jornada completa e regressões da seleção automática/manual quando uma pergunta esgota tentativas. Os testes de regressão controlam as respostas do caso para verificar a escolha feita pela interface; a jornada completa exercita a API real no modo demo. Inspeção do bundle estático não encontrou os nomes das secrets do servidor, a credencial fictícia do teste ou o marcador de contexto privado das fixtures. Isso não substitui a verificação com a configuração real.
 
 Para reproduzir: `npm run check` e, após o build, `OPSEC_E2E_PRODUCTION=1 npm run test:e2e`. Capturas sintéticas ficam em `artifacts/` e traces em `test-results/`, ambos ignorados pelo Git.

@@ -182,7 +182,10 @@ export function Workspace() {
       if (regionId) data.set('regionId', regionId);
       else {
         data.set('bbox', JSON.stringify(manual.split(',').map(Number)));
-        data.set('questionId', view.analysis.questions.find((q) => q.status === 'open')?.id ?? '');
+        data.set(
+          'questionId',
+          view.analysis.questions.find((q) => q.status === 'open' && q.attempts < 2)?.id ?? '',
+        );
       }
       apply(await request('/api/case/region', { method: 'POST', body: data }));
     },
@@ -191,7 +194,9 @@ export function Workspace() {
   useEffect(() => {
     if (!auto || !view || closed || busy || !file || view.phase !== 'exploring') return;
     const next = view.analysis.regions.find((r) =>
-      view.analysis.questions.some((q) => q.id === r.questionId && q.status === 'open'),
+      view.analysis.questions.some(
+        (q) => q.id === r.questionId && q.status === 'open' && q.attempts < 2,
+      ),
     );
     if (next) {
       const timer = setTimeout(() => void act(() => region(next.id)), 500);
@@ -557,7 +562,7 @@ export function Workspace() {
                       {view.analysis.regions
                         .filter((r) =>
                           view.analysis.questions.some(
-                            (q) => q.id === r.questionId && q.status === 'open',
+                            (q) => q.id === r.questionId && q.status === 'open' && q.attempts < 2,
                           ),
                         )
                         .map((r) => (
@@ -595,7 +600,14 @@ export function Workspace() {
                       </label>
                       <button
                         className="secondary"
-                        disabled={busy || !file || view.budget.crops >= 3}
+                        disabled={
+                          busy ||
+                          !file ||
+                          view.budget.crops >= 3 ||
+                          !view.analysis.questions.some(
+                            (q) => q.status === 'open' && q.attempts < 2,
+                          )
+                        }
                         onClick={() => act(() => region())}
                       >
                         Explorar recorte manual
