@@ -94,6 +94,11 @@ try {
         body: { action: 'search', seedIds: seeds, domains: seeds.length ? ['mozilla.org'] : [] },
       });
     } else if (view.phase === 'research_ready') {
+      if (view.verificationPending && view.budget.rounds < 2) {
+        log({ stage: 'verifying_cited_sources', round: view.budget.rounds + 1 });
+        await request('/api/case/advance', { body: { action: 'research_more' } });
+        continue;
+      }
       webVerified =
         (view.execution?.toolCalls ?? 0) > 0 && (view.research?.sources.length ?? 0) > 0;
       if (!webVerified)

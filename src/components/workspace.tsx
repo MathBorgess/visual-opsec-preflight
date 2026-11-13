@@ -522,6 +522,12 @@ export function Workspace() {
             </button>
           </div>
         )}
+        {view?.verificationPending && (
+          <div className="notice" role="status">
+            As fontes citadas aguardam verificação. O agente pode usar a rodada autorizada restante
+            para conferir os endereços antes de incluir os achados no dossiê.
+          </div>
+        )}
         {diagnostic && (
           <details className="panel">
             <summary>Diagnóstico técnico · {diagnostic.requestId.slice(0, 8)}</summary>

@@ -15,7 +15,13 @@ import {
   type Manifest,
   type ResearchData,
 } from '@/lib/contracts';
-import { approveSeeds, validateFindings, validateResearch, isSensitive } from '@/lib/policy';
+import {
+  approveSeeds,
+  validateFindings,
+  validateResearch,
+  isSensitive,
+  safeUrl,
+} from '@/lib/policy';
 import { buildReport } from '@/lib/report';
 import { processImage } from './image';
 import { guard, readManifest, jsonResponse, imageForm, boundedBody } from './security';
@@ -68,6 +74,8 @@ function selectProvider(): AgentsProvider {
   );
 }
 type Loaded = {
+  verificationIssue?: AppError;
+  verificationUrls: string[];
   failure?: AppError;
   initial: InitialContext;
   analysis: AnalysisData;
@@ -485,8 +493,10 @@ export function createApi(
               seeds,
               questions: seeds.map((s) => ({ seedId: s.id, question: s.purpose })),
               round: m.rounds,
-              instruction:
-                'Tente resolver alternativas pendentes sem ampliar sementes; preserve IDs de fontes anteriores.',
+              instruction: loaded.verificationUrls.length
+                ? 'As fontes da rodada anterior não foram aceitas. Abra exatamente os URLs de urlsToVerify usando web_search, confira o conteúdo e reconstrua Research com evidências efetivamente obtidas. Não apenas troque URLs mantendo trechos sem suporte. Use round atual; fonte inacessível fica unavailable. Não amplie sementes, domínios ou alvos.'
+                : 'Tente resolver alternativas pendentes sem ampliar sementes; preserve IDs de fontes anteriores.',
+              ...(loaded.verificationUrls.length ? { urlsToVerify: loaded.verificationUrls } : {}),
             },
             domains: m.allowedDomains,
             key: `${m.caseId}:research:${m.rounds}`,
@@ -585,6 +595,8 @@ async function load(p: AgentsProvider, m: Manifest): Promise<Loaded> {
     research: ResearchData | null = null,
     error: string | null = null;
   let failure = visual.failure;
+  let verificationIssue: AppError | undefined;
+  let verificationUrls: string[] = [];
   let analysis: AnalysisData = {
     ...empty,
     evidence: initial.image.metadata
@@ -615,8 +627,31 @@ async function load(p: AgentsProvider, m: Manifest): Promise<Loaded> {
   if (m.researchId && m.deletion[m.researchId] !== 'deleted') {
     try {
       search = await p.read(m.researchId);
-      if (search.outputs.length) {
-        const parsed = Research.parse(search.outputs.at(-1));
+      // Completed prior turns remain usable while a later turn is pending,
+      // cancelled or invalid. They do not complete that later turn.
+      for (const output of search.outputs) {
+        if (output === search.output) continue;
+        const prior = Research.safeParse(output);
+        if (!prior.success || prior.data.sources.some((s) => s.round > m.rounds)) continue;
+        try {
+          research = validateResearch(
+            prior.data,
+            analysis,
+            m.allowedSeedIds,
+            m.allowedDomains,
+            m.provider,
+            search.visitedUrls,
+          );
+        } catch {
+          // A rejected previous answer must never become fallback evidence.
+        }
+      }
+      const waitingNewTurn =
+        m.stage === 'research' &&
+        ['researching', 'uncertain'].includes(m.phase) &&
+        search.turnId === m.lastTurnId;
+      if (!waitingNewTurn && search.output !== null && search.turnStatus === 'completed') {
+        const parsed = Research.parse(search.output);
         if (parsed.sources.some((s) => s.round > m.rounds)) throw new Error('invalid round');
         research = validateResearch(
           parsed,
@@ -629,12 +664,72 @@ async function load(p: AgentsProvider, m: Manifest): Promise<Loaded> {
       }
     } catch (cause) {
       if (cause instanceof AppError && cause.code === 'CONTEXT_PENDING') throw cause;
-      failure = normalizeProviderError(cause);
-      logFailure(failure);
-      error =
-        'A pesquisa não pôde ser validada/recuperada. Os resultados visuais permanecem disponíveis.';
-      m.phase = 'partial';
-      m.stopReason = 'provider_failure';
+      const issue = normalizeProviderError(cause);
+      const candidate =
+        search?.turnStatus === 'completed' ? Research.safeParse(search.output) : null;
+      if (
+        m.stage === 'research' &&
+        search?.turnStatus === 'completed' &&
+        search.turnId !== m.lastTurnId
+      ) {
+        m.activeMs += Math.max(0, search.activeMs);
+        m.lastTurnId = search.turnId;
+      }
+      const safeSources =
+        candidate?.success &&
+        candidate.data.sources.every((s) => {
+          const url = safeUrl(s.url, m.provider === 'demo');
+          return (
+            !!url &&
+            m.allowedSeedIds.includes(s.seedId) &&
+            (!m.allowedDomains.length ||
+              m.allowedDomains.some(
+                (d) => new URL(url).hostname === d || new URL(url).hostname.endsWith('.' + d),
+              ))
+          );
+        });
+      if (
+        !failure &&
+        issue.code === 'UNVERIFIED_SOURCE' &&
+        safeSources &&
+        m.rounds < LIMITS.rounds &&
+        m.activeMs < LIMITS.activeMs &&
+        m.noGain < 2
+      ) {
+        verificationUrls = [
+          ...new Set(
+            candidate.data.sources
+              .map((s) => s.url)
+              .filter((url) => !search!.visitedUrls.some((v) => safeUrl(v) === safeUrl(url))),
+          ),
+        ];
+        verificationIssue = new AppError(issue.code, issue.message, issue.status, {
+          ...issue.details,
+          retryable: true,
+        });
+        research = {
+          sources: research?.sources ?? [],
+          findings: research?.findings ?? [],
+          limitations: [
+            'As fontes citadas aguardam confirmação por uma ação web concluída. Nenhum achado dessa rodada foi aceito.',
+          ],
+          followup:
+            'Abrir e verificar os endereços citados dentro da autorização e do orçamento restantes.',
+        };
+        if (m.stage === 'research' && ['researching', 'uncertain'].includes(m.phase))
+          m.phase = 'research_ready';
+        diagnosticEvent('research_verification_needed', {
+          urls: verificationUrls.length,
+          roundsRemaining: LIMITS.rounds - m.rounds,
+        });
+      } else {
+        failure = issue;
+        logFailure(failure);
+        error =
+          'A pesquisa não pôde ser validada/recuperada. Os resultados visuais permanecem disponíveis.';
+        m.phase = 'partial';
+        m.stopReason = 'provider_failure';
+      }
     }
   }
   const synths = visual.outputs.filter((o) => record(o) && typeof o.summary === 'string');
@@ -675,7 +770,18 @@ async function load(p: AgentsProvider, m: Manifest): Promise<Loaded> {
     m.stopReason = 'provider_failure';
     logFailure(failure);
   }
-  return { initial, analysis, research, synthesis, visual, search, error, failure };
+  return {
+    initial,
+    analysis,
+    research,
+    synthesis,
+    visual,
+    search,
+    error,
+    failure,
+    verificationIssue,
+    verificationUrls,
+  };
 }
 function reconcile(m: Manifest, l: Loaded, now: number) {
   if (
@@ -798,7 +904,8 @@ function view(m: Manifest, l: Loaded, model: string): CaseView {
       )
     : null;
   return {
-    diagnostic: snapshotDiagnostic(l.failure),
+    diagnostic: snapshotDiagnostic(l.failure ?? l.verificationIssue),
+    verificationPending: l.verificationUrls.length > 0,
     execution: {
       sessionStatus: (m.stage === 'research' ? l.search : l.visual)?.status ?? 'unknown',
       turnStatus: (m.stage === 'research' ? l.search : l.visual)?.turnStatus ?? 'unknown',
