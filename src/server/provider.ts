@@ -206,6 +206,7 @@ export class OpenAIAgentsProvider implements AgentsProvider {
         requests: Record<string, unknown>[] = [],
         visitedUrls: string[] = [];
       let output: unknown = null;
+      const history = { items: items.length, userMessages: 0, inputTextChars: 0, parseFailures: 0 };
       for (const item of items) {
         if (
           item.type === 'web_search_call' &&
@@ -220,11 +221,13 @@ export class OpenAIAgentsProvider implements AgentsProvider {
           .map((c) => c.text)
           .join('');
         if (item.role === 'user') {
+          history.userMessages++;
+          history.inputTextChars += txt.length;
           try {
             const parsed = JSON.parse(txt);
             if (record(parsed)) requests.push(parsed);
           } catch {
-            /* unknown user item is not an application checkpoint */
+            history.parseFailures++;
           }
         } else if (item.phase === 'final_answer' && item.status === 'completed') {
           let parsed: unknown;
@@ -248,24 +251,16 @@ export class OpenAIAgentsProvider implements AgentsProvider {
           id,
           turn?.id,
         )!;
-      if (
-        !initial &&
-        !items.some((item) => item.type === 'message' && item.role === 'user') &&
-        session.status !== 'failed' &&
-        turn?.status !== 'failed'
-      )
+      if (!initial) {
+        providerDiagnostic({ history });
+        diagnosticEvent('provider_history_pending', history);
         throw new AppError(
           'CONTEXT_PENDING',
           'Sessão aceita; aguardando o registro do histórico inicial.',
           503,
-          { retryable: true },
+          { retryable: true, provider: { sessionId: safeId(id), history } },
         );
-      if (!initial)
-        throw new AppError(
-          'MISSING_CONTEXT',
-          'A sessão não contém o contexto esperado do caso.',
-          502,
-        );
+      }
       return {
         id,
         status: session.status,

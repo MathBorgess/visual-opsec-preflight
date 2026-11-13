@@ -295,6 +295,7 @@ export class AppError extends Error {
   }
 }
 export type ProviderDiagnostic = {
+  history?: { items: number; userMessages: number; inputTextChars: number; parseFailures: number };
   summary?: string;
   hints?: string[];
   status?: number;
