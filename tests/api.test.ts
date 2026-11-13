@@ -716,6 +716,75 @@ describe('API do caso — jornada e fronteiras', () => {
       expect(p.calls.filter((r) => r.stage === 'research')).toHaveLength(2);
     },
   );
+  it.each(['synthesize', 'cancel'] as const)(
+    'verificação pendente preserva a decisão de %s após novas consultas',
+    async (action) => {
+      // Reuse a real-mode fixture to exercise the actual citation validator.
+      const demo = new DemoProvider();
+      const p: AgentsProvider & { calls: ProviderRequest[] } = {
+        mode: 'openai',
+        model: 'fixture-model',
+        calls: demo.calls,
+        start: (r) => demo.start(r),
+        cancel: (id) => demo.cancel(id),
+        delete: (id) => demo.delete(id),
+        read: async (id) => {
+          const s = structuredClone(await demo.read(id));
+          if (s.initial.kind === 'research') {
+            for (const o of s.outputs)
+              if (o && typeof o === 'object' && 'sources' in o)
+                for (const source of (o as { sources: Record<string, unknown>[] }).sources) {
+                  source.url = 'https://example.org/event';
+                  source.retrievalState = 'retrieved';
+                }
+          }
+          return s;
+        },
+      };
+      const h = await toReview(harness(p));
+      await h.call('advance', { action: 'search', seedIds: ['S1'] });
+      expect((await h.call('get')).data.phase).toBe('research_ready');
+      if (action === 'cancel') await h.call('cancel');
+      else await h.call('advance', { action });
+      for (let i = 0; i < 2; i++)
+        expect((await h.call('get')).data.phase).toBe(
+          action === 'cancel' ? 'cancelled' : 'completed',
+        );
+      expect(p.calls.filter((r) => r.stage === 'synthesis')).toHaveLength(
+        action === 'cancel' ? 0 : 1,
+      );
+    },
+  );
+  it.each(['in_progress', 'failed', 'cancelled'])(
+    'mantém fontes aceitas quando a segunda rodada está %s',
+    async (turnStatus) => {
+      class LaterTurn extends DemoProvider {
+        async read(id: string) {
+          const s = await super.read(id);
+          if (s.initial.kind !== 'research') return s;
+          if (this.calls.filter((r) => r.stage === 'research').length === 1) {
+            (s.output as { followup: string }).followup = 'Conferir uma alternativa pública.';
+            return s;
+          }
+          return {
+            ...s,
+            turnStatus,
+            status: turnStatus === 'in_progress' ? 'in_progress' : 'idle',
+            output: null,
+            outputs: [s.outputs[0]],
+          };
+        }
+      }
+      const h = await toReview(harness(new LaterTurn()));
+      await h.call('advance', { action: 'search', seedIds: ['S1'] });
+      expect((await h.call('get')).data.research.sources).toHaveLength(1);
+      await h.call('advance', { action: 'research_more' });
+      const result = await h.call('get');
+      expect(result.data.research.sources).toHaveLength(1);
+      expect(result.data.phase).toBe(turnStatus === 'in_progress' ? 'researching' : 'partial');
+      if (turnStatus !== 'in_progress') expect(result.data.report.research.sources).toHaveLength(1);
+    },
+  );
   it('resposta visual malformada mantém inventário e encerra com documento parcial', async () => {
     class Malformed extends DemoProvider {
       async read(id: string) {

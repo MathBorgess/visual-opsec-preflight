@@ -627,6 +627,25 @@ async function load(p: AgentsProvider, m: Manifest): Promise<Loaded> {
   if (m.researchId && m.deletion[m.researchId] !== 'deleted') {
     try {
       search = await p.read(m.researchId);
+      // Completed prior turns remain usable while a later turn is pending,
+      // cancelled or invalid. They do not complete that later turn.
+      for (const output of search.outputs) {
+        if (output === search.output) continue;
+        const prior = Research.safeParse(output);
+        if (!prior.success || prior.data.sources.some((s) => s.round > m.rounds)) continue;
+        try {
+          research = validateResearch(
+            prior.data,
+            analysis,
+            m.allowedSeedIds,
+            m.allowedDomains,
+            m.provider,
+            search.visitedUrls,
+          );
+        } catch {
+          // A rejected previous answer must never become fallback evidence.
+        }
+      }
       const waitingNewTurn =
         m.stage === 'research' &&
         ['researching', 'uncertain'].includes(m.phase) &&
@@ -685,15 +704,16 @@ async function load(p: AgentsProvider, m: Manifest): Promise<Loaded> {
           retryable: true,
         });
         research = {
-          sources: [],
-          findings: [],
+          sources: research?.sources ?? [],
+          findings: research?.findings ?? [],
           limitations: [
             'As fontes citadas aguardam confirmação por uma ação web concluída. Nenhum achado dessa rodada foi aceito.',
           ],
           followup:
             'Abrir e verificar os endereços citados dentro da autorização e do orçamento restantes.',
         };
-        m.phase = 'research_ready';
+        if (m.stage === 'research' && ['researching', 'uncertain'].includes(m.phase))
+          m.phase = 'research_ready';
         diagnosticEvent('research_verification_needed', {
           urls: verificationUrls.length,
           roundsRemaining: LIMITS.rounds - m.rounds,
