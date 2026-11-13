@@ -749,7 +749,7 @@ async function load(p: AgentsProvider, m: Manifest): Promise<Loaded> {
             m.phase = 'research_ready';
           diagnosticEvent('research_sources_curated', {
             retained: curated.sources.length,
-            discarded: candidate!.success
+            discarded: candidate?.success
               ? candidate.data.sources.length - curated.sources.length
               : 0,
           });
