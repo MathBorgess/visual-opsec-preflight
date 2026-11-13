@@ -8,6 +8,16 @@ import {
 } from './contracts';
 import { minimize } from './policy';
 
+export function minimizeReport(report: Report): Report {
+  // Redact string values while JSON still knows their types. Rewriting the
+  // serialized document can corrupt numeric boxes, counters or escaped text.
+  return JSON.parse(
+    JSON.stringify(report, (_key, value: unknown) =>
+      typeof value === 'string' ? minimize(value) : value,
+    ),
+  ) as Report;
+}
+
 export function buildReport(
   m: Manifest,
   initial: InitialContext,
@@ -141,7 +151,7 @@ export function buildReport(
       ],
     },
   };
-  return JSON.parse(minimize(JSON.stringify(report))) as Report;
+  return minimizeReport(report);
 }
 
 export function reportMarkdown(r: Report): string {
