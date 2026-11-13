@@ -54,3 +54,6 @@ O [teste sintético de produção](../.github/workflows/production-smoke.yml) é
 Não habilitar logs de payloads, cabeçalhos, cookie ou imagem. APIs têm `Cache-Control: no-store` e erros sanitizados. A visão pode ler dados pessoais dos pixels; remover EXIF não anonimiza uma foto.
 
 Referências: [Vercel environment variables](https://vercel.com/docs/environment-variables), [Secret/Config](https://vercel.com/changelog/environment-variables-now-use-config-and-secret-types), [Agents API](https://developers.openai.com/api/docs/guides/agents-api/overview).
+
+
+O esquema de saída enviado à Agents API usa o helper de Structured Outputs do SDK e caixas como arrays homogêneos de quatro números. O contrato local continua com a tupla posicional e os limites geométricos; JSON Schema genérico de tuplas (`prefixItems`/`items: false`) não deve ser enviado como esquema estrito. Os testes do adaptador verificam o contrato transmitido, além do JSON retornado.
