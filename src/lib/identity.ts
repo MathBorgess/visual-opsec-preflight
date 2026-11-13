@@ -7,6 +7,7 @@ import {
   isIdentitySeed,
   type AnalysisData,
   type DeclaredIdentityData,
+  type DiscoveryData,
   type ExposedDataClass,
   type ExposureCategory,
   type IdentityExposure,
@@ -49,6 +50,13 @@ export const dataClassLabels: Record<ExposedDataClass, string> = {
   biography: 'Minibiografia',
   affiliations: 'Vínculos e grupos',
   legal_mention: 'Menção em processo ou diário oficial',
+};
+export const facetLabels: Record<DiscoveryData['facet'], string> = {
+  profession: 'Profissão',
+  employer: 'Organização',
+  education: 'Formação',
+  activity: 'Atividade',
+  public_role: 'Papel público',
 };
 export const breadthLabels: Record<IdentityExposure['breadth'], string> = {
   not_assessed: 'Não avaliada',
@@ -285,6 +293,18 @@ export function identityExposure(
   );
   const attributed = relevant.filter((s) => s.exposure!.match === 'declared_identity');
   const homonyms = relevant.filter((s) => s.exposure!.match === 'possible_homonym');
+  // A discovery counts only when an attributed source supports it.
+  const attributedIds = new Set(attributed.map((s) => s.id));
+  const allDiscoveries = state === 'executed' ? (research?.discovered ?? []) : [];
+  const discovered = allDiscoveries
+    .filter(
+      (d) => d.match === 'declared_identity' && d.sourceIds.some((id) => attributedIds.has(id)),
+    )
+    .map((d) => ({
+      facet: d.facet,
+      value: d.value,
+      sourceIds: d.sourceIds.filter((id) => attributedIds.has(id)),
+    }));
   const group = <K extends string>(keys: (s: (typeof attributed)[number]) => K[]) => {
     const map = new Map<K, string[]>();
     for (const s of attributed)
@@ -332,6 +352,8 @@ export function identityExposure(
   return {
     state,
     seeds: approved.map((s) => s.text),
+    discovered,
+    homonymDiscoveries: allDiscoveries.length - discovered.length,
     attributedSources: attributed.map((s) => s.id),
     homonymSources: homonyms.map((s) => s.id),
     categories,
@@ -342,6 +364,11 @@ export function identityExposure(
       ? [
           'Amplitude observada em busca limitada a duas rodadas; não é probabilidade de dano nem cobertura completa da internet.',
           'A atribuição de cada fonte à identidade é do modelo e pode conter homônimos; revise as fontes antes de agir.',
+          ...(discovered.length
+            ? [
+                'Profissão, organização e atividades descobertas são leituras do modelo sobre as fontes citadas; confirme-as antes de agir.',
+              ]
+            : []),
           ...(homonyms.length
             ? [`${homonyms.length} fonte(s) com possível homônimo ficaram fora da contagem.`]
             : []),

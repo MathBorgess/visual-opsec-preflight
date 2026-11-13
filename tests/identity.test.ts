@@ -210,6 +210,50 @@ describe('identidade declarada com autorização', () => {
       'Processo [nº de processo omitido] citado.',
     );
   });
+  it('aceita descobertas proativas só com fonte existente e sem dado sensível', () => {
+    const attributed = {
+      category: 'professional_profile' as const,
+      dataClasses: ['role' as const],
+      match: 'declared_identity' as const,
+    };
+    const research: ResearchData = {
+      sources: [source('W1', 'PID1', { exposure: attributed })],
+      findings: [],
+      limitations: [],
+      followup: null,
+      discovered: [
+        { facet: 'profession', value: 'Engenheira', sourceIds: ['W1'], match: 'declared_identity' },
+        { facet: 'profession', value: 'engenheira', sourceIds: ['W1'], match: 'declared_identity' },
+        { facet: 'employer', value: 'Empresa X', sourceIds: ['W9'], match: 'declared_identity' },
+        {
+          facet: 'activity',
+          value: 'contato (81) 99999-1234',
+          sourceIds: ['W1'],
+          match: 'declared_identity',
+        },
+        { facet: 'education', value: 'Física', sourceIds: ['W1'], match: 'possible_homonym' },
+      ],
+    };
+    const clean = validateResearch(research, analysis, ['PID1'], [], 'openai', [
+      research.sources[0].url,
+    ]);
+    expect(clean.discovered?.map((d) => d.value)).toEqual(['Engenheira', 'Física']);
+    const exposure = identityExposure(identity, analysis.seeds, clean, ['PID1'], 1);
+    expect(exposure.discovered).toEqual([
+      { facet: 'profession', value: 'Engenheira', sourceIds: ['W1'] },
+    ]);
+    expect(exposure.homonymDiscoveries).toBe(1);
+    // Without an approved identity seed nothing is kept as a discovery.
+    const photoOnly = validateResearch(
+      { ...research, sources: [source('W1', 'S1')] },
+      analysis,
+      ['S1'],
+      [],
+      'openai',
+      [research.sources[0].url],
+    );
+    expect(photoOnly.discovered).toEqual([]);
+  });
   it('mede amplitude com critério declarado e deixa homônimos fora da contagem', () => {
     const seeds = analysis.seeds;
     const exposure = (sources: SourceData[], id: DeclaredIdentityData | null = identity) =>

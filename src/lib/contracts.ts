@@ -189,12 +189,30 @@ export const Source = z
     exposure: SourceExposure.nullable().optional(),
   })
   .strict();
+// Facets the research discovers proactively from the declared name. Location,
+// contact, schedule, relatives and sensitive attributes are never facets.
+export const DISCOVERED_FACETS = [
+  'profession',
+  'employer',
+  'education',
+  'activity',
+  'public_role',
+] as const;
+export const Discovery = z
+  .object({
+    facet: z.enum(DISCOVERED_FACETS),
+    value: z.string().min(2).max(120),
+    sourceIds: z.array(id).min(1).max(12),
+    match: z.enum(['declared_identity', 'possible_homonym']),
+  })
+  .strict();
 export const Research = z
   .object({
     sources: z.array(Source).max(12),
     findings: z.array(Finding).max(15),
     limitations: z.array(text).max(12),
     followup: text.nullable(),
+    discovered: z.array(Discovery).max(12).optional(),
   })
   .strict();
 export const Synthesis = z
@@ -226,9 +244,13 @@ export type SeedData = z.infer<typeof Seed>;
 export type DeclaredIdentityData = z.infer<typeof DeclaredIdentity>;
 export type ExposureCategory = (typeof EXPOSURE_CATEGORIES)[number];
 export type ExposedDataClass = (typeof EXPOSED_DATA)[number];
+export type DiscoveryData = z.infer<typeof Discovery>;
 export type IdentityExposure = {
   state: 'not_requested' | 'not_authorized' | 'not_executed' | 'executed' | 'failed';
   seeds: string[];
+  // What the search found from the name, supported by attributed sources.
+  discovered: { facet: DiscoveryData['facet']; value: string; sourceIds: string[] }[];
+  homonymDiscoveries: number;
   attributedSources: string[];
   homonymSources: string[];
   categories: { category: ExposureCategory; sourceIds: string[] }[];

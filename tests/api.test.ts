@@ -99,8 +99,8 @@ function form(bytes = photo, consent = true) {
   f.set('consent', consent ? 'yes' : 'no');
   f.set('context', 'PRIVATE_CONTEXT owner@example.invalid');
   // Every case declares who appears in the photo under its own authorization.
+  // The interface asks only for the name; the search discovers the rest.
   f.set('identityName', 'Bruna Ficticia');
-  f.set('identityProfession', 'analista de dados');
   f.set('identityRelation', 'self');
   f.set('identityConsent', 'yes');
   return f;
@@ -345,7 +345,9 @@ describe('API do caso — jornada e fronteiras', () => {
     const h = await toReview();
     await h.call('advance', { action: 'search', seedIds: [] });
     const search = h.provider.calls.find((c) => c.stage === 'research')!;
-    expect((search.data.seeds as { id: string }[]).map((seed) => seed.id)).toEqual(['PID1']);
+    const seeds = search.data.seeds as { id: string; text: string; purpose: string }[];
+    expect(seeds.map((seed) => [seed.id, seed.text])).toEqual([['PID1', '"Bruna Ficticia"']]);
+    expect(seeds[0].purpose).toContain('proativamente');
     await h.call('get');
     await h.call('advance', { action: 'synthesize' });
     const report = (await h.call('get')).data.report;
@@ -1137,6 +1139,12 @@ describe('trilha de identidade autorizada', () => {
       breadth: 'high',
     });
     expect(report.scope.facesVisible).toBe(1);
+    expect(report.identity.discovered.map((d: { facet: string }) => d.facet)).toEqual([
+      'profession',
+      'employer',
+      'activity',
+    ]);
+    expect(report.identity.homonymDiscoveries).toBe(1);
     expect(
       report.identity.categories.find((c: { category: string }) => c.category === 'public_record')
         .sourceIds,
@@ -1150,6 +1158,7 @@ describe('trilha de identidade autorizada', () => {
     expect(markdown).toContain('Amplitude observada: Alta');
     expect(markdown).toContain('Rostos visíveis: 1');
     expect(markdown).toContain('Processo ou diário oficial: W5');
+    expect(markdown).toContain('Organização: Instituto Exemplo (fictício) (W2)');
     expect(markdown).toContain('possível homônimo');
   });
   it('a autorização de identificação não aceita sementes de identidade inventadas', async () => {

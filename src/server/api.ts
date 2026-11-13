@@ -1056,6 +1056,7 @@ function view(m: Manifest, l: Loaded, model: string): CaseView {
         excerpt: minimize(s.excerpt),
         limitation: minimize(s.limitation),
       })),
+      discovered: l.research.discovered?.map((d) => ({ ...d, value: minimize(d.value) })),
     },
     report,
     limits: LIMITS,

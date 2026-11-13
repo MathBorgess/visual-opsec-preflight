@@ -181,7 +181,7 @@ export function publicResearchPurpose(
 ) {
   const purposes = {
     declared_identity:
-      'Medir a exposição pública da identidade declarada: procurar o nome com a profissão declarada em páginas institucionais, perfis profissionais/acadêmicos públicos, publicações, notícias e perfis públicos. ' +
+      'Buscar proativamente a identidade declarada a partir do nome: descobrir profissão, organização, formação, atividades e papéis públicos em fontes públicas, depois aprofundar buscando o nome combinado ao que foi descoberto. Use a profissão declarada, se houver, e os sinais aprovados da foto para separar homônimos. ' +
       identityLimits,
     declared_activity:
       'Verificar se a atividade declarada aparece publicamente associada ao nome: eventos, projetos, grupos, competições, publicações ou portfólios. ' +
@@ -289,6 +289,18 @@ export function validateResearch(
     s.url = url;
     sourceIds.add(s.id);
   }
+  // Discoveries survive only with an approved identity, existing sources and
+  // values free of contacts, documents or case numbers.
+  const seen = new Set<string>();
+  result.discovered = identityApproved
+    ? (result.discovered ?? []).filter((d) => {
+        const key = d.facet + ':' + d.value.trim().toLowerCase();
+        if (seen.has(key) || isSensitive(d.value) || d.sourceIds.some((id) => !sourceIds.has(id)))
+          return false;
+        seen.add(key);
+        return true;
+      })
+    : [];
   validateFindings(result.findings, analysis, result.sources);
   return result;
 }
@@ -357,6 +369,7 @@ export function curateVerifiedResearch(
       {
         sources,
         findings,
+        discovered: result.discovered,
         followup: null,
         limitations: [
           ...result.limitations.slice(0, 11),

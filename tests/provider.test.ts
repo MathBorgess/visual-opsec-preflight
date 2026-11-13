@@ -182,6 +182,8 @@ describe('adaptador Agents API — SDK real com HTTP controlado', () => {
     // Research sources always declare exposure under strict Structured Outputs.
     const sourceSchema = calls[1].body.agent.text.format.schema.properties.sources.items;
     expect(sourceSchema.required).toContain('exposure');
+    expect(calls[1].body.agent.text.format.schema.required).toContain('discovered');
+    expect(calls[1].body.agent.instructions).toContain('Seja proativo');
     expect(calls[1].body.agent.instructions).toContain('declared_identity');
     expect(calls[1].body.agent.instructions).toContain('Não pivote para familiares');
     expect(calls[1].body.agent.instructions).toContain('Escavador e Jusbrasil são permitidos');

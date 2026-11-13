@@ -61,6 +61,7 @@ Todo caso novo declara uma identidade sob a autorização de identificação, e 
 | `sources[].exposure` | Categoria (perfil profissional, produção acadêmica, página institucional, evento, imprensa, rede social, código/portfólio, processo ou diário oficial, outra), classes de dados visíveis (incluindo `legal_mention`) e `match` |
 | `identity.categories` / `identity.dataClasses` | Onde a identidade aparece e que dados ficam alcançáveis, com IDs das fontes atribuídas |
 | `identity.homonymSources` | Fontes marcadas como possível homônimo, fora da contagem |
+| `identity.discovered` | O que a busca descobriu a partir do nome (profissão, organização, formação, atividade, papel público), com as fontes atribuídas que sustentam cada item; `homonymDiscoveries` conta as descobertas deixadas de fora |
 | `identity.breadth` | Amplitude observada: `not_assessed`, `undetermined`, `low`, `moderate` ou `high` |
 
 Critério declarado da amplitude: categorias distintas + contato e menção em processo ou diário oficial (2 cada) + cidade, agenda e foto (1 cada); até 2 baixa, 3 a 5 moderada, 6 ou mais alta. Sem fonte atribuída, `undetermined`. É uma regra de curadoria sobre uma busca limitada, não probabilidade de dano nem cobertura da internet. Classes de contato, cidade e agenda registram que o dado é alcançável; valores não são copiados e telefones, endereços e CEP são mascarados.

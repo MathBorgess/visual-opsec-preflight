@@ -16,6 +16,7 @@ import {
   breadthLabels,
   categoryLabels,
   dataClassLabels,
+  facetLabels,
   parseIdentityForm,
   relationLabels,
 } from '@/lib/identity';
@@ -162,8 +163,6 @@ export function Workspace() {
     [context, setContext] = useState(''),
     [consent, setConsent] = useState(false);
   const [identityName, setIdentityName] = useState(''),
-    [identityProfession, setIdentityProfession] = useState(''),
-    [identityActivities, setIdentityActivities] = useState(''),
     [identityRelation, setIdentityRelation] = useState<'self' | 'authorized'>('self'),
     [identityConsent, setIdentityConsent] = useState(false);
   const identityDeclared = identityName.trim().length > 0;
@@ -453,16 +452,12 @@ export function Workspace() {
     form.set('consent', consent ? 'yes' : 'no');
     const fields = {
       name: identityName,
-      profession: identityProfession,
-      activities: identityActivities,
       relation: identityRelation,
       consent: identityConsent ? 'yes' : 'no',
     };
     // Same validation as the server, before any upload.
     parseIdentityForm(fields, new Date().toISOString());
     form.set('identityName', fields.name);
-    form.set('identityProfession', fields.profession);
-    form.set('identityActivities', fields.activities);
     form.set('identityRelation', fields.relation);
     form.set('identityConsent', fields.consent);
     setUploadStage('Enviando foto…');
@@ -700,9 +695,10 @@ export function Workspace() {
               <fieldset className="identity-fieldset">
                 <legend>Quem aparece na foto</legend>
                 <p className="muted">
-                  A análise mede quanto foto e identidade revelam juntas. Use somente a sua
-                  identidade ou a de alguém que autorizou expressamente. Nada é identificado pelo
-                  rosto: a busca parte apenas do que você declarar.
+                  Informe só o nome: a pesquisa descobre sozinha profissão, organização, formação e
+                  atividades em fontes públicas, usando os sinais da foto para separar homônimos.
+                  Use somente a sua identidade ou a de alguém que autorizou expressamente. Nada é
+                  identificado pelo rosto.
                 </p>
                 <fieldset className="radio-row">
                   <legend className="sr-only">De quem é a identidade</legend>
@@ -738,25 +734,6 @@ export function Workspace() {
                     onChange={(e) => setIdentityName(e.target.value)}
                   />
                 </label>
-                <label className="field">
-                  Profissão
-                  <input
-                    maxLength={IDENTITY_LIMITS.qualifier}
-                    autoComplete="off"
-                    placeholder="Ex.: professora de física"
-                    value={identityProfession}
-                    onChange={(e) => setIdentityProfession(e.target.value)}
-                  />
-                </label>
-                <label className="field">
-                  Atividades, até {IDENTITY_LIMITS.activities}, uma por linha
-                  <textarea
-                    maxLength={IDENTITY_LIMITS.activities * (IDENTITY_LIMITS.qualifier + 1)}
-                    placeholder={'Ex.: palestrante em eventos de tecnologia\ncorrida de rua'}
-                    value={identityActivities}
-                    onChange={(e) => setIdentityActivities(e.target.value)}
-                  />
-                </label>
               </fieldset>
               <fieldset className="authorizations">
                 <legend>Autorizações do caso</legend>
@@ -781,11 +758,11 @@ export function Workspace() {
                   />
                   <span>
                     <strong>Identificação.</strong> A identidade informada é minha ou de quem
-                    autorizou expressamente esta pesquisa educativa. Autorizo pesquisar nome,
-                    profissão e atividades em fontes públicas (LinkedIn, redes sociais, Escavador e
-                    Jusbrasil), sem enviar a foto, e cruzá-los com os sinais públicos da imagem. Com
-                    rosto presente, a busca segue de forma autônoma e cobre só esta pessoa, nunca
-                    familiares ou colegas.
+                    autorizou expressamente esta pesquisa educativa. Autorizo pesquisar de forma
+                    proativa o nome e o que fontes públicas associam a ele (profissão, organização,
+                    atividades) em LinkedIn, redes sociais, Escavador e Jusbrasil, sem enviar a
+                    foto, e cruzar com os sinais públicos da imagem. Com rosto presente, a busca
+                    segue de forma autônoma e cobre só esta pessoa, nunca familiares ou colegas.
                   </span>
                 </label>
               </fieldset>
@@ -847,9 +824,9 @@ export function Workspace() {
                 <li>
                   <strong>Identidade declarada</strong>
                   <p>
-                    Nome, profissão e atividades viram buscas em LinkedIn, redes sociais, Escavador
-                    e Jusbrasil, sem a foto. Só a pessoa autorizada; buscadores de pessoas, busca
-                    facial e vazamentos ficam fora.
+                    O nome vira buscas proativas em LinkedIn, redes sociais, Escavador e Jusbrasil,
+                    sem a foto, para descobrir profissão e atividades. Só a pessoa autorizada;
+                    buscadores de pessoas, busca facial e vazamentos ficam fora.
                   </p>
                 </li>
               </ol>
@@ -934,11 +911,24 @@ export function Workspace() {
                   IDENTIDADE AUTORIZADA · {relationLabels[view.identity.relation].toUpperCase()}
                 </p>
                 <h3 id="identity-heading">{view.identity.name}</h3>
-                <p>
-                  {[view.identity.profession, ...view.identity.activities]
-                    .filter(Boolean)
-                    .join(' · ') || 'Sem profissão ou atividades declaradas.'}
-                </p>
+                {view.research?.discovered?.some((d) => d.match === 'declared_identity') ? (
+                  <ul className="chips" aria-label="Descoberto a partir do nome">
+                    {view.research.discovered
+                      .filter((d) => d.match === 'declared_identity')
+                      .map((d) => (
+                        <li key={d.facet + d.value}>
+                          {facetLabels[d.facet]}: {d.value} · {d.sourceIds.join(', ')}
+                        </li>
+                      ))}
+                  </ul>
+                ) : (
+                  <p>
+                    {[view.identity.profession, ...view.identity.activities]
+                      .filter(Boolean)
+                      .join(' · ') ||
+                      'Profissão, organização e atividades serão procuradas a partir do nome.'}
+                  </p>
+                )}
                 <p className="muted">
                   Declarada por você, não reconhecida pelo rosto. A pesquisa mede o que fontes
                   públicas associam a este nome
@@ -1156,21 +1146,23 @@ export function Workspace() {
                     <h3 className="seed-group">Identidade autorizada</h3>
                     <p>
                       Incluídas pela autorização de identificação dada ao abrir o caso. Partem do
-                      nome declarado, combinado à profissão e às atividades, e cruzam a identidade
-                      com os sinais da foto selecionados acima: mostram o que um desconhecido
-                      encontraria com a foto e o nome. Incluem LinkedIn, redes sociais, Escavador e
-                      Jusbrasil. Somente esta pessoa: familiares, colegas e outras pessoas da foto
-                      ficam fora, assim como buscadores de pessoas, busca facial, vazamentos, número
-                      de processo, endereço, telefone pessoal e rotina.
+                      nome declarado, descobrem profissão, organização e atividades e cruzam a
+                      identidade com os sinais da foto selecionados acima: mostram o que um
+                      desconhecido encontraria com a foto e o nome. Incluem LinkedIn, redes sociais,
+                      Escavador e Jusbrasil. Somente esta pessoa: familiares, colegas e outras
+                      pessoas da foto ficam fora, assim como buscadores de pessoas, busca facial,
+                      vazamentos, número de processo, endereço, telefone pessoal e rotina.
                     </p>
                     <ul className="seed-list" aria-label="Buscas da identidade autorizada">
                       {view.analysis.seeds.filter(isIdentitySeed).map((s) => (
                         <li className="seed identity" key={s.id}>
                           <strong>{s.text}</strong>
                           <small>
-                            {s.classification === 'declared_identity'
-                              ? 'Nome e profissão declarados'
-                              : 'Nome e atividade declarados'}{' '}
+                            {s.classification === 'declared_activity'
+                              ? 'Nome e atividade declarados'
+                              : s.evidenceIds.length > 1
+                                ? 'Nome e profissão declarados'
+                                : 'Nome declarado; profissão e atividades a descobrir'}{' '}
                             · evidências: {s.evidenceIds.join(', ')} · incluída pela autorização
                           </small>
                         </li>
@@ -1525,6 +1517,25 @@ function IdentitySection({ report }: { report: Report }) {
             <strong>{breadthLabels[x.breadth]}</strong>
           </div>
           <p>{x.breadthReason}</p>
+          {x.discovered.length > 0 && (
+            <>
+              <p>
+                <strong>O que a busca descobriu a partir do nome</strong>
+              </p>
+              <ul className="chips" aria-label="Descobertas a partir do nome">
+                {x.discovered.map((d) => (
+                  <li key={d.facet + d.value}>
+                    {facetLabels[d.facet]}: {d.value} · {d.sourceIds.join(', ')}
+                  </li>
+                ))}
+              </ul>
+              {x.homonymDiscoveries > 0 && (
+                <p className="muted">
+                  {x.homonymDiscoveries} descoberta(s) de possível homônimo fora da lista.
+                </p>
+              )}
+            </>
+          )}
           {x.categories.length > 0 && (
             <>
               <p>

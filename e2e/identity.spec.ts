@@ -13,10 +13,8 @@ test('fluxo principal com identidade: foto + nome + autorizações → exposiç�
   await page
     .getByRole('textbox', { name: 'Nome usado publicamente', exact: true })
     .fill('Ana Exemplo');
-  await page.getByRole('textbox', { name: 'Profissão', exact: true }).fill('professora de física');
-  await page
-    .getByRole('textbox', { name: /^Atividades/ })
-    .fill('palestrante em eventos\ncorrida de rua');
+  // Only the name is asked: profession and activities are discovered by the search.
+  await expect(page.getByRole('textbox', { name: 'Profissão' })).toHaveCount(0);
   const start = page.getByRole('button', { name: 'Iniciar simulação' });
   // Both authorizations are required: environment and identification.
   await page.getByRole('checkbox', { name: /^Ambiente\./ }).check();
@@ -39,7 +37,7 @@ test('fluxo principal com identidade: foto + nome + autorizações → exposiç�
   ).toBeVisible();
   // Identity searches come from the identification authorization, not from a checkbox.
   await expect(page.getByRole('list', { name: 'Buscas da identidade autorizada' })).toContainText(
-    '"Ana Exemplo" corrida de rua',
+    'profissão e atividades a descobrir',
   );
   await expect(page.getByRole('checkbox', { name: /"Ana Exemplo"/ })).toHaveCount(0);
   await expect(page.getByRole('checkbox', { name: /Encontro Aurora/ })).toBeChecked();
@@ -57,6 +55,12 @@ test('fluxo principal com identidade: foto + nome + autorizações → exposiç�
     dossier.getByRole('heading', { name: '5.1 Exposição da identidade autorizada' }),
   ).toBeVisible();
   await expect(dossier.locator('.breadth')).toContainText('Alta');
+  await expect(dossier.getByRole('list', { name: 'Descobertas a partir do nome' })).toContainText(
+    'Profissão: Pesquisadora em segurança da informação',
+  );
+  await expect(page.getByRole('list', { name: 'Descoberto a partir do nome' })).toContainText(
+    'Organização: Instituto Exemplo',
+  );
   await expect(dossier.getByRole('list', { name: 'Categorias de exposição' })).toContainText(
     'Processo ou diário oficial',
   );

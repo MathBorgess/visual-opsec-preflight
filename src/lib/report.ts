@@ -11,6 +11,7 @@ import {
   breadthLabels,
   categoryLabels,
   dataClassLabels,
+  facetLabels,
   identityExposure,
   relationLabels,
 } from './identity';
@@ -270,6 +271,10 @@ function identitySection(r: Report): string[] {
     clean(`Amplitude observada: ${breadthLabels[x.breadth]}. ${x.breadthReason}`),
     'Sementes de identidade liberadas:',
     list(x.seeds),
+    'O que a busca descobriu a partir do nome:',
+    list(
+      x.discovered.map((d) => `${facetLabels[d.facet]}: ${d.value} (${d.sourceIds.join(', ')})`),
+    ),
     'Onde a identidade aparece:',
     list(x.categories.map((c) => `${categoryLabels[c.category]}: ${c.sourceIds.join(', ')}`)),
     'Dados alcançáveis a partir da foto e da identidade:',

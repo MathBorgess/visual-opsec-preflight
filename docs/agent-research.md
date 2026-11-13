@@ -12,7 +12,7 @@ Não identificar desconhecidos por rosto, inferir residência/rotina, fazer rast
 
 ## Identidade autorizada
 
-Para mostrar quanto uma foto e uma identidade revelam juntas, todo caso declara nome, profissão e até três atividades de quem aparece na foto: a própria identidade ou a de alguém que autorizou expressamente a pesquisa educativa. A identidade é contexto fornecido (`UID*`, `user_context`), nunca reconhecida pelo rosto.
+Para mostrar quanto uma foto e uma identidade revelam juntas, todo caso declara o nome de quem aparece na foto, e a pesquisa descobre de forma proativa profissão, organização, formação e atividades: a própria identidade ou a de alguém que autorizou expressamente a pesquisa educativa. A identidade é contexto fornecido (`UID*`, `user_context`), nunca reconhecida pelo rosto.
 
 | Passo | Controle |
 | --- | --- |

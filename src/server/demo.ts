@@ -6,6 +6,7 @@ import {
   type AnalysisData,
   type ResearchData,
   type InitialContext,
+  type DiscoveryData,
   type FindingData,
   type SourceData,
 } from '@/lib/contracts';
@@ -105,7 +106,12 @@ export function demoAnalysis(initial: InitialContext, refined = false): Analysis
 // used; no person is searched in demo mode.
 function demoIdentityResearch(seeds: AnalysisData['seeds'], round: number) {
   const declared = seeds.filter(isIdentitySeed);
-  if (!declared.length) return { sources: [] as SourceData[], findings: () => [] as FindingData[] };
+  if (!declared.length)
+    return {
+      sources: [] as SourceData[],
+      findings: () => [] as FindingData[],
+      discovered: [] as DiscoveryData[],
+    };
   const profile = declared[0];
   const activity = declared.find((s) => s.classification === 'declared_activity') ?? profile;
   const base = {
@@ -217,7 +223,34 @@ function demoIdentityResearch(seeds: AnalysisData['seeds'], round: number) {
         ]
       : []),
   ];
-  return { sources, findings: finding };
+  // Proactive discovery from the name alone, all fictional.
+  const discovered: DiscoveryData[] = [
+    {
+      facet: 'profession',
+      value: 'Pesquisadora em segurança da informação (fictício)',
+      sourceIds: ['W2'],
+      match: 'declared_identity',
+    },
+    {
+      facet: 'employer',
+      value: 'Instituto Exemplo (fictício)',
+      sourceIds: ['W2'],
+      match: 'declared_identity',
+    },
+    {
+      facet: 'activity',
+      value: 'Palestrante no Encontro Aurora 2026 (fictício)',
+      sourceIds: ['W3'],
+      match: 'declared_identity',
+    },
+    {
+      facet: 'profession',
+      value: 'Outra profissão de um homônimo (fictício)',
+      sourceIds: ['W4'],
+      match: 'possible_homonym',
+    },
+  ];
+  return { sources, findings: finding, discovered };
 }
 export class DemoProvider implements AgentsProvider {
   readonly mode = 'demo' as const;
@@ -285,6 +318,7 @@ export class DemoProvider implements AgentsProvider {
         ],
         limitations: ['Pesquisa simulada; não demonstra exposição real.'],
         followup: null,
+        discovered: identity.discovered,
       } satisfies ResearchData;
     } else
       output = {
