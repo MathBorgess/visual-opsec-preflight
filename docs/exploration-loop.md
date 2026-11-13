@@ -1,6 +1,6 @@
 # Loop de exploração e critérios de parada
 
-Proposta de 2026-11-13, sem implementação ou análise real. Complementa [Agente de curadoria](agent-research.md), [Catálogo de fontes](source-catalog.md) e [Contrato do dossiê](exposure-report.md).
+Contrato de 2026-11-13, com [implementação e testes locais](implementation-status.md), sem análise real executada. Complementa [Agente de curadoria](agent-research.md), [Catálogo de fontes](source-catalog.md) e [Contrato do dossiê](exposure-report.md).
 
 ## Princípio de decisão
 

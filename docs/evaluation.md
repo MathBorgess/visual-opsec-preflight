@@ -1,6 +1,6 @@
 # Avaliação e critérios de verificação
 
-Plano de 2026-11-13, alinhado à V1 web na Vercel. Substitui o plano centrado em Tesseract e sanitização local. Nenhuma avaliação de produto foi executada; estas são verificações futuras.
+Plano de 2026-11-13, alinhado à V1 web na Vercel. Substitui o plano centrado em Tesseract e sanitização local. Testes determinísticos e a jornada local foram executados; veja a [matriz de evidências](implementation-status.md). Qualidade semântica, custo e latência ao vivo continuam pendentes.
 
 ## Conjunto de avaliação
 

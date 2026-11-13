@@ -1,6 +1,6 @@
 # Arquitetura da primeira versão
 
-Desenho proposto em 2026-11-13. Substitui a arquitetura local/offline e a extensão com diversas APIs do desenho anterior. Esta etapa define o produto e seus contratos; não provisiona infraestrutura ou credenciais.
+Desenho de 2026-11-13, com implementação local registrada em [Entrega e evidências](implementation-status.md). Substitui a arquitetura local/offline e a extensão com diversas APIs do desenho anterior. Infraestrutura e credenciais não foram provisionadas.
 
 ## Decisões de desenho
 
@@ -11,7 +11,7 @@ Desenho proposto em 2026-11-13. Substitui a arquitetura local/offline e a extens
 | Backend | Route Handlers em Vercel Functions, runtime Node.js; validação e controle fora do modelo |
 | IA | OpenAI Agents API; visão do modelo e web search nativo; sem chamadas separadas à Responses API |
 | Execução | `environment.type = none`; sem sandbox, shell, MCP ou múltiplos agentes |
-| Imagem | Bibliotecas de decodificação/normalização e metadados, candidatas Sharp e exifr; sem Tesseract na V1 |
+| Imagem | Sharp 0.34.5 e exifr 7.1.3 para normalização/metadados; sem Tesseract na V1 |
 | Credencial | `OPENAI_API_KEY` como Secret do projeto Vercel; detalhe em [OpenAI e secrets](openai-integration.md) |
 | Acesso | Premissa V1 privada, protegendo UI e APIs com Vercel Authentication em todas as URLs utilizadas |
 | Persistência | Sem banco, Blob ou histórico permanente da aplicação; sessões de trabalho na OpenAI, original no navegador e exportações no dispositivo |

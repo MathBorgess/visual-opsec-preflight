@@ -1,8 +1,8 @@
 # Visual OpSec — especificação de produto e atividades
 
-Rascunho de 2026-11-13, sintetizado com a skill to-spec a partir desta conversa e do estado do repositório. Base documental: commit 16fc6f819323a456c8aee07c31498bca213dec7e, no [PR de arquitetura](https://github.com/MathBorgess/visual-opsec-preflight/pull/1).
+Especificação de 2026-11-13, sintetizada com a skill to-spec e posteriormente aprovada para implementação local. Base documental original: commit 16fc6f819323a456c8aee07c31498bca213dec7e, no [PR de arquitetura](https://github.com/MathBorgess/visual-opsec-preflight/pull/1).
 
-Estado: pronto para revisão do conteúdo; fronteira principal dos testes ainda proposta. Publicação no rastreador e aplicação da label ready-for-agent pendentes da configuração do projeto e da conferência de testes exigidas pela skill. Nenhuma implementação, provisionamento, análise real ou implantação foi realizada.
+Estado: implementação local autorizada, incluindo a fronteira de API proposta abaixo. A [matriz de entrega](implementation-status.md) registra evidências e pendências. Implantação Vercel, inclusão da chave e validação ao vivo foram reservadas pelo autor para a etapa final. Não há publicação no rastreador ou label ready-for-agent declarada.
 
 ## Problem Statement
 
@@ -10,7 +10,7 @@ Uma pessoa pode compartilhar uma foto sem perceber textos ao fundo, telas, docum
 
 O autor precisa entender quais informações estão observáveis, quais correlações são sustentáveis, quais são apenas hipóteses e como reduzir a exposição. Precisa também enxergar onde a exploração terminou, sem receber uma biografia fabricada, uma promessa de varrer toda a internet ou um certificado de segurança.
 
-O repositório atual contém desenho e critérios de avaliação, sem aplicação ou testes de produto. A proposta inicial de CLI offline foi substituída, nesta conversa, por aplicação na Vercel com Agents API e web search nativo.
+Na elaboração desta spec, o repositório continha somente desenho e critérios de avaliação. A proposta inicial de CLI offline foi substituída por aplicação na Vercel com Agents API e web search nativo.
 
 ## Solution
 
@@ -99,7 +99,7 @@ Primeira versão privada para o autor preparar demonstrações é uma premissa d
 
 ### Mapa de atividades
 
-Atividades são propostas de entrega, não tickets criados ou trabalho em andamento. RF-01–19 e RNF-01–11 são os requisitos identificados nos documentos do projeto. Cada atividade incorpora seus testes de comportamento; a validação integrada não adia os testes até o fim.
+Atividades são unidades de entrega, sem declaração de tickets criados. O estado atual está em [Entrega local e evidências](implementation-status.md). RF-01–19 e RNF-01–11 são os requisitos identificados nos documentos do projeto. Cada atividade incorpora seus testes de comportamento.
 
 | ID | Entrega e requisitos cobertos | Dependências | Evidência de conclusão futura |
 | --- | --- | --- | --- |
@@ -116,17 +116,17 @@ Atividades são propostas de entrega, não tickets criados ou trabalho em andame
 | AT-11 | Preview privado Vercel e checagem real limitada/autorizada; RF-05, RF-08, RF-11, RF-14, RF-16; RNF-01, RNF-02, RNF-07, RNF-08 | AT-02, AT-10 | Proteção, contrato real de imagem/busca, fontes, artefatos, uso e encerramento verificados; teste de navegador sobre preview |
 | AT-12 | Preparação da produção privada e demonstração educativa; RF-10, RF-11, RF-16, RF-19; RNF-01, RNF-05, RNF-10 | AT-11 | Deployment testado e alvo verificado; segredo corretamente separado; demonstração reproduzível com limitações, sem dados de terceiros |
 
-Não há responsáveis, prazos ou estimativas acordados. Publicar a spec ou criar tarefas não executa essas atividades. A implementação e o deploy continuam sendo etapas futuras.
+Não há responsáveis, prazos ou estimativas acordados no rastreador. Publicar a spec não executa atividades. A implementação local foi autorizada depois do desenho; deploy e secrets permanecem na etapa final.
 
 ## Testing Decisions
 
-### Fronteira principal proposta, pendente de conferência
+### Fronteira principal aceita para implementação local
 
 Usar a API da aplicação como principal fronteira de teste: iniciar caso → acompanhar estado → fornecer região da mesma foto → revisar sementes → pesquisar → obter dossiê → cancelar/encerrar. Exercitar os módulos reais da aplicação juntos, com o transporte OpenAI substituído por um serviço controlado que representa entradas, estados e respostas do provedor.
 
 Não simular cada helper interno. Manter imagem e parser reais sobre fixtures sintéticas, verificar respostas do caso, dossiê/exportação e payloads enviados ao serviço externo. Isso permite cobrir regras e isolamento sem depender de resultados variáveis ou custos de busca em cada teste.
 
-Essa é uma fronteira nova porque ainda não existe aplicação. Seu aceite pelo usuário está pendente; não tratá-lo como já acordado.
+Esta fronteira foi aceita pelo autor ao solicitar a implementação local completa. Os testes de API mantêm parser e imagem reais, com o serviço externo controlado; o SDK também tem testes próprios de transporte HTTP.
 
 ### Complementos e comportamento verificável
 
@@ -145,7 +145,7 @@ Um bom teste observa o que o autor recebe, o que sai para cada destino e quando 
 
 ### Estado atual e prior art
 
-Não existem testes de produto, endpoints executáveis, CI ou uma fronteira de integração reaproveitável. Há apenas validações documentais e um schema legado de candidatos visuais. Elas não validam o dossiê completo nem o comportamento do futuro agente.
+Na elaboração da spec existiam apenas validações documentais e um schema legado. Agora há aplicação, endpoints, testes de API/imagem/SDK, jornada de navegador e workflow de CI preparado. A [matriz de evidências](implementation-status.md) distingue esses resultados das verificações ao vivo ainda pendentes.
 
 As fixtures e exemplos de desenho já preparados são pontos de partida para dados de teste, sem serem resultados reais. Usar uma fronteira principal e só acrescentar outra se uma classe de comportamento não puder ser observada adequadamente nela.
 

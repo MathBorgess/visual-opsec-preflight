@@ -1,6 +1,6 @@
 # Documento de exposição virtual
 
-Contrato de produto proposto em 2026-11-13, versão de desenho `exposure-report/1.0-draft`. Não é uma análise real. Ver [exemplo sintético](examples/exposure-report.synthetic.md) e [requisitos](requirements.md).
+Contrato de produto de 2026-11-13. A implementação local usa `exposure-report/1.0`, definido em `src/lib/contracts.ts`. O exemplo de desenho continua sintético e não é análise real. Ver [exemplo](examples/exposure-report.synthetic.md), [requisitos](requirements.md) e [evidências locais](implementation-status.md).
 
 ## Propósito
 
