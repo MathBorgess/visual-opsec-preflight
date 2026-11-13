@@ -669,7 +669,11 @@ async function load(p: AgentsProvider, m: Manifest): Promise<Loaded> {
       const issue = normalizeProviderError(cause);
       const candidate =
         search?.turnStatus === 'completed' ? Research.safeParse(search.output) : null;
-      if (search?.turnStatus === 'completed' && search.turnId !== m.lastTurnId) {
+      if (
+        m.stage === 'research' &&
+        search?.turnStatus === 'completed' &&
+        search.turnId !== m.lastTurnId
+      ) {
         m.activeMs += Math.max(0, search.activeMs);
         m.lastTurnId = search.turnId;
       }

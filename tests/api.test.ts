@@ -772,6 +772,7 @@ describe('API do caso — jornada e fronteiras', () => {
         read: async (id) => {
           const s = structuredClone(await demo.read(id));
           if (s.initial.kind === 'research') {
+            s.activeMs = 100_000;
             for (const o of s.outputs)
               if (o && typeof o === 'object' && 'sources' in o)
                 for (const source of (o as { sources: Record<string, unknown>[] }).sources) {
