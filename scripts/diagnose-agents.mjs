@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
 import sharp from 'sharp';
+import { createRequire } from 'node:module';
 import { randomUUID, randomFillSync } from 'node:crypto';
 
 // Explicit build-only probe. No customer input and no exported credential.
@@ -118,8 +119,11 @@ if (process.env.OPSEC_PROBE_FULL_CASE === '1') {
     return response;
   };
   let cookie = '';
-  const origin = 'https://visual-opsec-preflight.vercel.app';
-  const caseRoute = (await import('../.next/server/app/api/case/route.js')).routeModule.userland;
+  const origin = process.env.VERCEL
+    ? 'https://visual-opsec-preflight.vercel.app'
+    : 'http://localhost:3000';
+  const require = createRequire(import.meta.url);
+  const caseRoute = require('../.next/server/app/api/case/route.js').routeModule.userland;
   try {
     const bytes = await sharp(randomFillSync(Buffer.alloc(2048 * 2048 * 3)), {
       raw: { width: 2048, height: 2048, channels: 3 },
@@ -129,8 +133,7 @@ if (process.env.OPSEC_PROBE_FULL_CASE === '1') {
     const form = new FormData();
     form.set('image', new Blob([bytes], { type: 'image/jpeg' }), 'synthetic.jpg');
     form.set('consent', 'yes');
-    const handler = (await import('../.next/server/app/api/cases/route.js')).routeModule.userland
-      .POST;
+    const handler = require('../.next/server/app/api/cases/route.js').routeModule.userland.POST;
     const response = await handler(
       new Request(origin + '/api/cases', {
         method: 'POST',
