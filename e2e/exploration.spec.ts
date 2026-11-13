@@ -60,7 +60,7 @@ function scenario(): CaseView {
 
 // Controlled case responses isolate the browser's choice of branch. The server
 // rejects exhausted questions just as the real API does; it never silently accepts them.
-async function controlledCase(page: Page, view: CaseView) {
+async function controlledCase(page: Page, view: CaseView, refine?: (v: CaseView) => void) {
   let started = false;
   const selectedQuestions: string[] = [];
   await page.route('**/api/cases', async (route) => {
@@ -96,6 +96,7 @@ async function controlledCase(page: Page, view: CaseView) {
     // go to Q2. This is distinct from the no-gain/inconclusive stopping path.
     view.budget.noGain = 0;
     if (view.budget.crops === LIMITS.crops) view.phase = 'awaiting_search_review';
+    refine?.(view);
     await route.fulfill({ status: 202, json: view });
   });
   return selectedQuestions;
@@ -142,4 +143,81 @@ test('recorte manual ignora pergunta esgotada e usa a próxima elegível', async
   ).toBeDisabled();
   expect(selected).toEqual(['Q2']);
   await expect(page.getByRole('main').getByRole('alert')).toHaveCount(0);
+});
+
+const oldSeed = {
+  id: 'S1',
+  text: 'Evento antigo',
+  evidenceIds: ['V1'],
+  purpose: 'Contexto público.',
+  classification: 'public_event' as const,
+};
+const newSeed = { ...oldSeed, id: 'S2', text: 'Evento revisado' };
+
+for (const replacement of [[newSeed], []]) {
+  test(`revisão remove sementes obsoletas após recorte: ${replacement.length ? 'substituição' : 'remoção total'}`, async ({
+    page,
+  }) => {
+    const view = scenario();
+    view.analysis.seeds = [oldSeed];
+    await controlledCase(page, view, (v) => {
+      v.analysis.seeds = replacement;
+      v.phase = 'awaiting_search_review';
+    });
+    let submitted: string[] | null = null;
+    await page.route('**/api/case/advance', async (route) => {
+      const body = route.request().postDataJSON();
+      submitted = body.seedIds;
+      if (body.seedIds.some((id: string) => !view.analysis.seeds.some((s) => s.id === id))) {
+        await route.fulfill({
+          status: 400,
+          json: { error: { code: 'SENSITIVE_QUERY', message: 'Semente removida.' } },
+        });
+        return;
+      }
+      view.phase = body.seedIds.length ? 'researching' : 'synthesizing';
+      await route.fulfill({ status: 202, json: view });
+    });
+    await start(page);
+    await expect(
+      page.getByRole('heading', { name: 'Quais sinais podem ser pesquisados?' }),
+    ).toBeVisible();
+    await expect(page.getByRole('checkbox', { name: /Evento antigo/ })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Gerar dossiê sem pesquisa' })).toBeVisible();
+    if (replacement.length) {
+      const checkbox = page.getByRole('checkbox', { name: /Evento revisado/ });
+      await expect(checkbox).not.toBeChecked();
+      await checkbox.check();
+    }
+    await page
+      .getByRole('button', {
+        name: replacement.length ? 'Autorizar sinais e pesquisar' : 'Gerar dossiê sem pesquisa',
+      })
+      .click();
+    await expect.poll(() => submitted).toEqual(replacement.map((s) => s.id));
+    await expect(page.getByRole('main').getByRole('alert')).toHaveCount(0);
+  });
+}
+
+test('atualizar sementes preserva exclusões do autor e deixa novas opções desmarcadas', async ({
+  page,
+}) => {
+  const view = scenario();
+  view.phase = 'awaiting_search_review';
+  view.analysis.seeds = [oldSeed, newSeed];
+  await controlledCase(page, view);
+  await start(page);
+  const existing = page.getByRole('checkbox', { name: /Evento antigo/ });
+  const excluded = page.getByRole('checkbox', { name: /Evento revisado/ });
+  await expect(existing).toBeChecked();
+  await excluded.uncheck();
+  view.analysis.seeds = [
+    ...view.analysis.seeds,
+    { ...newSeed, id: 'S3', text: 'Evento adicional' },
+  ];
+  await page.getByRole('button', { name: 'Atualizar', exact: true }).click();
+  await expect(page.getByRole('checkbox', { name: /Evento adicional/ })).toBeVisible();
+  await expect(page.getByRole('checkbox', { name: /Evento adicional/ })).not.toBeChecked();
+  await expect(existing).toBeChecked();
+  await expect(excluded).not.toBeChecked();
 });

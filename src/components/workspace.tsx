@@ -1,8 +1,8 @@
 'use client';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CaseView, Report } from '@/lib/contracts';
-import { reportMarkdown } from '@/lib/report';
-import { safeUrl, minimize } from '@/lib/policy';
+import { minimizeReport, reportMarkdown } from '@/lib/report';
+import { safeUrl } from '@/lib/policy';
 
 const phaseNames: Record<string, string> = {
   analyzing: 'Analisando a imagem',
@@ -54,7 +54,7 @@ async function request(path: string, options?: RequestInit) {
   return data;
 }
 function download(report: Report, format: 'json' | 'md') {
-  const safeReport = JSON.parse(minimize(JSON.stringify(report))) as Report;
+  const safeReport = minimizeReport(report);
   const body = format === 'json' ? JSON.stringify(safeReport, null, 2) : reportMarkdown(safeReport);
   const url = URL.createObjectURL(
     new Blob([body], {
@@ -108,6 +108,9 @@ export function Workspace() {
     if (v.caseId !== selectedCase.current) {
       selectedCase.current = v.caseId;
       setSeeds(v.analysis.seeds.map((s) => s.id));
+    } else {
+      const available = new Set(v.analysis.seeds.map((s) => s.id));
+      setSeeds((selected) => selected.filter((id) => available.has(id)));
     }
     if (v.report && reviewedKey.current !== v.caseId + v.phase) {
       setReviewed(v.report);

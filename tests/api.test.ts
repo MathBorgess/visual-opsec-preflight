@@ -5,7 +5,7 @@ import { createApi } from '@/server/api';
 import { DemoProvider } from '@/server/demo';
 import { readManifest, signManifest } from '@/server/security';
 import { reportMarkdown } from '@/lib/report';
-import { LIMITS, type CaseView, type Manifest } from '@/lib/contracts';
+import { Analysis, LIMITS, type CaseView, type Manifest } from '@/lib/contracts';
 import type { ProviderRequest, Snapshot } from '@/server/provider';
 
 let photo: Buffer;
@@ -111,6 +111,50 @@ async function toReview(h = harness()) {
 }
 
 describe('API do caso — jornada e fronteiras', () => {
+  it.each(['completed', 'partial'] as const)(
+    'dossiê %s preserva caixas decimais e números ao minimizar textos privados',
+    async (status) => {
+      const bbox = [0.12345, 0.23456, 0.4, 0.3];
+      class PreciseProvider extends DemoProvider {
+        async read(id: string) {
+          const s = await super.read(id);
+          if (s.initial.kind === 'research' && status === 'partial') throw Error('fixture outage');
+          return {
+            ...s,
+            usageTokens: s.initial.kind === 'research' ? 0 : 123456789012,
+            outputs: s.outputs.map((output) => {
+              const parsed = Analysis.safeParse(output);
+              if (!parsed.success) return output;
+              parsed.data.evidence[0].bbox = [0.12345, 0.23456, 0.4, 0.3];
+              parsed.data.evidence[0].description =
+                'Contato pessoa@example.invalid; posição -12.34567, -45.67891.\nTexto "entre aspas" e documento 123456789012.';
+              return parsed.data;
+            }),
+          };
+        }
+      }
+      const h = await toReview(harness(new PreciseProvider()));
+      await h.call('advance', { action: 'search', seedIds: ['S1'] });
+      let done = await h.call('get');
+      if (status === 'completed') {
+        await h.call('advance', { action: 'synthesize' });
+        done = await h.call('get');
+      }
+      expect(done.status).toBe(200);
+      const report = done.data.report;
+      expect(report.status).toBe(status);
+      expect(report.visual[0].bbox).toEqual(bbox);
+      expect(report.coverage.usageTokens).toBe(123456789012);
+      expect(report.coverage.cost).toBeNull();
+      expect(report.metadata.find((m: { field: string }) => m.field === 'GPS').private).toBe(true);
+      expect(report.visual[0].description).toContain('[e-mail omitido]');
+      expect(report.visual[0].description).toContain('[coordenadas omitidas]');
+      expect(report.visual[0].description).toContain('[documento omitido]');
+      expect(report.visual[0].description).toContain('\nTexto "entre aspas"');
+      expect(JSON.stringify(report)).not.toContain('pessoa@example.invalid');
+      expect(JSON.stringify(report)).not.toContain('-12.34567');
+    },
+  );
   it('processa arquivo real, explora, pesquisa isoladamente, entrega oito seções e encerra', async () => {
     const h = await toReview();
     expect(
