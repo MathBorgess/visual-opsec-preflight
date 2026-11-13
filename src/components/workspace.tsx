@@ -528,6 +528,14 @@ export function Workspace() {
             para conferir os endereços antes de incluir os achados no dossiê.
           </div>
         )}
+        {view?.diagnostic?.code === 'UNVERIFIED_SOURCE' &&
+          !view.verificationPending &&
+          !!view.research?.sources.length && (
+            <div className="notice" role="status">
+              Citações sem comprovação e os achados dependentes foram descartados. A síntese
+              preserva somente fontes verificadas e registra a cobertura parcial.
+            </div>
+          )}
         {diagnostic && (
           <details className="panel">
             <summary>Diagnóstico técnico · {diagnostic.requestId.slice(0, 8)}</summary>

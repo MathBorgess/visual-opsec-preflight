@@ -188,3 +188,53 @@ export function validateFindings(
     }
   }
 }
+
+export function curateVerifiedResearch(
+  result: ResearchData,
+  analysis: AnalysisData,
+  approvedIds: string[],
+  domains: string[],
+  mode: string,
+  citedUrls: string[],
+): ResearchData | null {
+  const sources = result.sources.filter(
+    (s) =>
+      s.retrievalState !== 'unavailable' && citedUrls.some((v) => safeUrl(v) === safeUrl(s.url)),
+  );
+  if (!sources.length) return null;
+  const sourceIds = new Set(sources.map((s) => s.id));
+  const known = new Set([...analysis.evidence.map((e) => e.id), ...sourceIds]);
+  const findings = result.findings.filter((f) => {
+    if (
+      !f.evidenceIds.every((id) => known.has(id)) ||
+      !f.evidenceIds.some((id) => sourceIds.has(id))
+    )
+      return false;
+    try {
+      validateFindings([f], analysis, sources);
+      return true;
+    } catch {
+      return false;
+    }
+  });
+  try {
+    return validateResearch(
+      {
+        sources,
+        findings,
+        followup: null,
+        limitations: [
+          ...result.limitations.slice(0, 11),
+          `${result.sources.length - sources.length} fonte(s) sem comprovação nas ações web e os achados dependentes foram descartados após a conferência limitada. A síntese usa somente o restante validado; cobertura parcial.`,
+        ],
+      },
+      analysis,
+      approvedIds,
+      domains,
+      mode,
+      citedUrls,
+    );
+  } catch {
+    return null;
+  }
+}

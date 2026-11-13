@@ -70,3 +70,9 @@ O próprio registro de mensagem pode aparecer antes de seu conteúdo estar compl
 A validação consome apenas mensagens finais de turnos confirmados como concluídos e URLs de ações web concluídas. Se o turno concluir antes de sua mensagem final aparecer, o controlador aguarda na mesma fase, dentro do prazo ativo. Em falha de proveniência, `sourceAudit` mostra ao solicitante a URL declarada e URLs públicas registradas; esse campo é removido dos logs de runtime. Não se desativa a validação de fontes para concluir um dossiê.
 
 Uma URL citada que ainda não foi aberta pode usar a segunda rodada autorizada para verificação. O backend só propõe endereços públicos ligados às sementes e domínios aprovados; os achados rejeitados ficam fora do dossiê. No modo automático, a UI solicita essa rodada pela API de ação, sem iniciar trabalho pago em GET. Ela conta nas duas rodadas e no prazo de 180s. Se a fonte continuar sem comprovação, o caso termina parcial.
+
+## Curadoria após conferência limitada
+
+Se, após o orçamento de conferência, algumas citações continuarem sem ação web correspondente, o controlador descarta essas fontes e os achados dependentes. Só segue à síntese se houver fonte restante que passe por toda a validação de URL, domínio, semente e referências. Sem fonte comprovada, mantém documento parcial. Não amplia domínios nem cria terceira rodada. A interface e o dossiê registram a cobertura parcial.
+
+O smoke sintético usa o padrão da interface: web pública delimitada pelas sementes aprovadas, sem filtro adicional de domínio. `OPSEC_SMOKE_DOMAINS=mozilla.org` permite testar explicitamente esse filtro; fonte fora da lista continua interrompendo o caso. O teste é bem-sucedido somente com visão, ações web, fontes verificadas, síntese, relatório e exclusão remota confirmados.
