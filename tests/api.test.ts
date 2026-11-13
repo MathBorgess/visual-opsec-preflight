@@ -603,6 +603,56 @@ describe('API do caso — jornada e fronteiras', () => {
     expect(ended.data.remoteDeletionConfirmed).toBe(true);
     expect(cancel).toHaveBeenCalledTimes(1);
   });
+  it('turno concluído sem mensagem persistida aguarda e depois retoma a mesma sessão', async () => {
+    class DelayedOutput extends DemoProvider {
+      reads = 0;
+      async read(id: string) {
+        const s = await super.read(id);
+        return this.reads++ === 0 ? { ...s, output: null, outputs: [] } : s;
+      }
+    }
+    const h = harness(new DelayedOutput());
+    await h.call('create', form());
+    expect((await h.call('get')).data.phase).toBe('analyzing');
+    expect((await h.call('get')).data.phase).toBe('exploring');
+    expect(h.provider.calls).toHaveLength(1);
+  });
+  it('espera por mensagem final persistida também respeita o prazo ativo', async () => {
+    class NoOutput extends DemoProvider {
+      async read(id: string) {
+        return { ...(await super.read(id)), output: null, outputs: [] };
+      }
+    }
+    let clock = Date.now();
+    const h = harness(new NoOutput(), () => clock);
+    await h.call('create', form());
+    clock += LIMITS.activeMs + 1;
+    const v = await h.call('get');
+    expect(v.data.phase).toBe('partial');
+    expect(v.data.stopReason).toBe('deadline_reached');
+  });
+  it('auditoria de URLs aparece no diagnóstico e é omitida de todos os logs', async () => {
+    const logs = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      class BadSource extends DemoProvider {
+        async read(): Promise<never> {
+          throw new AppError('UNVERIFIED_SOURCE', 'Não confirmada.', 502, {
+            sourceAudit: {
+              reportedUrl: 'https://example.org/report',
+              recordedUrls: ['https://example.org/opened'],
+            },
+          });
+        }
+      }
+      const h = harness(new BadSource());
+      await h.call('create', form());
+      const v = await h.call('get');
+      expect(v.data.diagnostic.sourceAudit.reportedUrl).toBe('https://example.org/report');
+      expect(logs.mock.calls.flat().join(' ')).not.toContain('example.org');
+    } finally {
+      logs.mockRestore();
+    }
+  });
   it('resposta visual malformada mantém inventário e encerra com documento parcial', async () => {
     class Malformed extends DemoProvider {
       async read(id: string) {

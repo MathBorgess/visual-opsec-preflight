@@ -284,7 +284,7 @@ export function createApi(
       if (
         ['analyzing', 'researching', 'synthesizing'].includes(m.phase) &&
         active &&
-        ['in_progress', 'requires_action'].includes(active.status) &&
+        (['in_progress', 'requires_action'].includes(active.status) || active.output === null) &&
         m.activeMs + now() - m.pendingStartedAt >= LIMITS.activeMs
       ) {
         m.stopReason = 'deadline_reached';
@@ -699,6 +699,9 @@ function reconcile(m: Manifest, l: Loaded, now: number) {
     if (now - m.createdAt > 24 * 3600_000) m.stopReason = 'deadline_reached';
     return;
   }
+  // Turn metadata can precede the persisted final message. Keep polling the
+  // same turn instead of committing an empty/invalid terminal document.
+  if (s.output === null) return;
   m.activeMs += Math.max(0, s.activeMs);
   m.lastTurnId = s.turnId;
   const current = fingerprint(l.analysis, m.stage === 'research' ? l.research : null);

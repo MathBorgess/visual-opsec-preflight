@@ -99,6 +99,17 @@ export function validateResearch(
         'UNVERIFIED_SOURCE',
         'A fonte não consta nas referências retornadas pela ferramenta.',
         502,
+        {
+          sourceAudit: {
+            reportedUrl: url,
+            recordedUrls: citedUrls
+              .flatMap((v) => {
+                const safe = safeUrl(v);
+                return safe ? [safe] : [];
+              })
+              .slice(0, 12),
+          },
+        },
       );
     if (
       domains.length &&
