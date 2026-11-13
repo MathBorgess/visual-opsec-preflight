@@ -1,32 +1,63 @@
-# Ameaças, privacidade e avaliação
+# Avaliação e critérios de verificação
 
-## Modelo de ameaça inicial
+Plano de 2026-11-13, alinhado à V1 web na Vercel. Substitui o plano centrado em Tesseract e sanitização local. Nenhuma avaliação de produto foi executada; estas são verificações futuras.
 
-Ativos: foto original, textos/identificadores presentes, relatório de detecção e cópia exportada. Adversários/cenários: observador de foto publicada, imagem malformada, prompt injection em texto visual e vazamento acidental por logs/telemetria. Não é um serviço de investigação de terceiros.
+## Conjunto de avaliação
 
-Controles propostos: local-first, limites de bytes/pixels, formatos restritos, dependências atualizadas, nenhum efeito externo disparado por conteúdo, revisão humana, ausência de logs de texto extraído e separação entre original/saída. Não prometer apagamento seguro no disco, anonimato nem proteção contra toda inferência visual.
+Fotos encenadas/sintéticas com textos e metadados fictícios; negativos sem sinais sensíveis; variações de rotação, iluminação, reflexo e texto pequeno. Separar desenvolvimento e avaliação. Quando houver imagem real, exigir autorização específica para análise e, separadamente, para demonstração.
 
-## Dataset
+O gabarito lista observações diretamente sustentáveis, correlações possíveis, hipóteses não sustentadas e perguntas sem resposta. GPT Image não integra a V1; fixtures de teste e metadados devem ter valores conhecidos, inseridos por método determinístico.
 
-Fixtures sintéticas com endereços, etiquetas e crachás fictícios; exemplos negativos sem dados sensíveis. Imagens reais apenas com consentimento para análise e autorização separada para demonstração. Nunca commitar originais pessoais. Conjunto de avaliação separado dos exemplos usados no desenvolvimento.
+## Critérios por camada
 
-## Medidas a registrar, não resultados existentes
+| Camada | Verificação necessária |
+| --- | --- |
+| Ingestão | JPEG/PNG válidos, orientação, limites reais de bytes/pixels, falha de parser e preservação do original |
+| Análise visual | Acertos/omissões por categoria e tamanho; texto ilegível não vira identificador; caixas dentro da imagem |
+| Exploração | Pedido útil, mesmo original por hash, transformação correta e limite de três recortes |
+| Pesquisa | Sementes autorizadas, duas rodadas máximas, payload sem foto/inventário privado e fontes reais |
+| Dossiê | Oito seções, referências válidas, citações pertinentes, contradições e desconhecidos explícitos |
+| Secrets | Chave fora de bundle, respostas, cookies, prompts, relatórios e logs; falha sanitizada quando indisponível |
+| Acesso | UI e todas as APIs protegidas, referências de sessão não arbitrárias, origem e cookie validadas |
+| Ciclo de vida | Poll/reconexão sem replay cego, cancelamento, fechamento da página e exclusão com resultado confirmado |
+| Interface | Keyboard, labels/estados acessíveis, revisão humana e download coerente com JSON canônico |
 
-- Precision/recall de candidatos por categoria e tamanho de texto, com número de imagens e critério de correspondência de caixas.
-- Falsos negativos e positivos, incluindo reflexos, texto pequeno, rotação e baixa iluminação.
-- Grupos de metadados presentes antes/depois, formatos efetivamente cobertos e orientação preservada.
-- Vazamento residual pós-exportação, rechecagem independente e revisão humana.
-- Latência p50/p95 com versões, hardware, resolução, warm/cold start e tamanho da amostra.
-- Preservação do original e nenhum acesso de rede durante processamento.
+## Casos negativos mínimos
 
-## Testes mínimos antes da primeira demo
+1. Imagem corrompida, animação, excesso de pixels/bytes, extensão enganosa e corpo multipart acima do limite.
+2. EXIF de orientação e GPS fictício; PNG com campos de texto; parser não suporta campo ou falha: distinguir de ausência.
+3. Foto com nome público e segredo sintético adjacente: somente semente liberada entra na sessão web.
+4. Instrução maliciosa em imagem/metadado/página: não muda política, ferramentas ou destino de dados.
+5. Homônimos, edições diferentes, página duplicada, snippet sem página acessível e ausência de resultados.
+6. Região inválida, arquivo trocado e quarto recorte: rejeitar antes de chamada paga.
+7. Referência de evidência inexistente, fonte inventada e hipótese promovida a fato: não aceitar dossiê final.
+8. HTML/script em texto de achado/fonte: não executar na interface nem no arquivo exportado.
+9. Timeout/rate limit, resposta de configuração, queda de conexão e resultado desconhecido de operação: manter erro parcial e reconciliar.
+10. Cancelamento com turno remoto ainda ativo; exclusão recusada/pendente; cookie expirada e sessão órfã: não alegar limpeza realizada.
+11. Request sem acesso, cookie adulterada, origem incorreta ou sessão não vinculada: negar sem expor IDs ou conteúdo.
+12. Deployment antigo após rotação: não reutilizar como rollback com chave revogada.
 
-JPEG com EXIF de orientação e GPS fictício; JPEG com comentário/thumbnail; PNG com texto/XMP sintético; imagem sem metadados; entrada corrompida; imagem excessiva; regiões fora dos limites; tentativa de sobrescrever original; texto visual que tenta instruir o agente; máscara que cobre integralmente texto fictício. Não chamar exportação verificada se o verificador falhar.
+## Casos específicos do loop
 
-## Referências técnicas
+13. Pergunta com evidência suficiente: encerrar o ramo sem buscar mais URLs apenas para volume.
+14. Dois resultados duplicados sem ganho: parar a exploração por saturação, com motivo correto e pendências.
+15. Contradição pertinente: contar como ganho, rever a hipótese e não promover homônimo a identidade.
+16. Limite de três recortes atingido com rodada web ainda útil: bloquear recorte, sem encerrar a modalidade elegível.
+17. Página sugere investigar participante/contato: não acrescentar alvo; marcar fronteira de escopo no resultado.
+18. Fonte manual ou inacessível: registrar como não consultada/inacessível, sem dados inventados.
+19. Prazo alcançado enquanto turno remoto continua ativo: impedir novas fases e mostrar cancelamento não confirmado.
+20. Guardrail apenas instrucional: injeção tenta novo pivô dentro do turno web; avaliar o comportamento real sem anunciar interceptação prévia de cada consulta.
 
-- ExifTool: https://exiftool.org/ — a remoção não garante cobrir todos metadados em todos formatos.
-- Pillow: https://pillow.readthedocs.io/en/stable/ — verificar documentação da versão adotada.
-- Tesseract: https://tesseract-ocr.github.io/ — OCR não interpreta automaticamente risco de privacidade.
+Validar os contratos de [loop](exploration-loop.md) e [fontes](source-catalog.md). Ganho semântico continua sujeito a avaliação de correção; o contador não converte julgamento do modelo em fato.
 
-Essas referências orientam implementação; este bootstrap não constitui auditoria do produto.
+## Medidas e limites
+
+Medir observações corretas, omissões, correlações indevidas e pertinência de citações. Comparar análise sem web com análise enriquecida nas mesmas fixtures; ganho significa conclusão útil sustentada, não quantidade de páginas.
+
+Registrar versões/configuração, tamanho da amostra, resolução, repetição/variabilidade, latências p50/p95 e uso/custo disponível. Objetivo de 180s e limites de recorte/rodada são hipóteses de produto, não resultados. Não prometer contagem de buscas internas ou teto financeiro rígido sem controle correspondente do provedor.
+
+## Etapas futuras de validação
+
+Primeiro validar contratos/fixtures e comportamento simulado. Depois, quando a implementação for solicitada, confirmar acesso de API e executar uma análise real limitada/autorizada. Conferir payloads, fontes e artefatos reais; mocks não provam acesso ou qualidade da busca.
+
+Por fim, build/checks do app e teste de navegador sobre preview privado na Vercel: upload → análise → exploração → revisão de sementes → pesquisa → documento → download → encerramento. Conferir proteção e ausência de segredo no cliente antes de produção privada. Nesta etapa documental, verificar somente consistência, referências e exemplos.
