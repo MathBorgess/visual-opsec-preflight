@@ -39,7 +39,17 @@ Eventos levam chave de idempotência e o SDK não faz retries automáticos. Isso
 
 ## Limites operacionais
 
-Functions usam Node.js. O SDK tem timeout de 25s por chamada; a UI acompanha turnos por polling. Histórico pode exigir múltiplas chamadas. Não se presume que o prazo ativo de 180s cancele instantaneamente o trabalho remoto: o backend tenta cancelar ao observar o limite. Fechar a aba interrompe o controlador local, sem garantir interrupção no provedor.
+Functions usam Node.js e `maxDuration=60s` (30s no observador SSE). O SDK tem timeout de 20s por chamada, sem retries automáticos, e o backend compartilha um prazo de 45s por requisição. A UI mostra bytes enviados/espera no upload e acompanha turnos por polling e eventos nativos filtrados da Agents API. Cada conexão SSE dura até 20s e pode reconectar; o polling reconcilia eventos perdidos. Histórico paginado pode exigir múltiplas chamadas, dentro do prazo compartilhado. Não se presume que o prazo ativo de 180s cancele instantaneamente o trabalho remoto: o backend tenta cancelar ao observar o limite. Fechar a aba interrompe o controlador local, sem garantir interrupção no provedor.
+
+A foto original deve ter até 3 MiB e 16 milhões de pixels. O navegador verifica os cabeçalhos antes de enviar; o servidor repete a validação. A derivada JPEG passa por no máximo seis combinações de resolução/qualidade, de 2048px/82 a 512px/60, até caber em 700 KiB. Não se aumenta o limite inline da OpenAI: `image_url` admite no máximo 1.048.576 caracteres, incluindo o prefixo/base64. O inventário vem do original; a derivada enviada à visão não copia EXIF. Redução pode prejudicar texto pequeno e é declarada nas limitações.
+
+## Investigar falhas
+
+Abra **Diagnóstico técnico → Baixar diagnóstico**. O JSON contém ID da requisição, etapa, duração, se o provedor foi chamado e, quando disponíveis, código/status/campo e IDs OpenAI de requisição, sessão e turno. Limites incluem valor observado e máximo. Sem resposta do servidor, o diagnóstico marca o resultado remoto como desconhecido, sem reenviar a criação. Uma rejeição definitiva de criação pela OpenAI não deixa um caso incerto bloqueando uma tentativa manual.
+
+No painel Vercel, filtre Runtime Logs pelo `requestId` do JSON: `opsec.stage` registra validação, metadados, normalização e aceitação remota; `opsec.failure` registra a causa sanitizada; `opsec.response` registra o status HTTP. Falhas de turno persistidas também aparecem no resultado parcial. Use os IDs no [painel Agents da OpenAI](https://platform.openai.com/logs?api=agents). Retenção de logs depende do plano; eventos ao vivo não têm replay e não substituem o estado persistido. Nenhum desses registros contém imagem, nome do arquivo, contexto, mensagem bruta do provedor ou secrets.
+
+O [teste sintético de produção](../.github/workflows/production-smoke.yml) é explícito: execute manualmente ou publique uma tag `opsec-live-check-*` no SHA já implantado. Ele confere `/api/config.revision`, cria um único caso com foto fictícia detalhada, aprova somente Mozilla/Firefox com domínio `mozilla.org`, exige visão, busca web, dossiê e exclusão remota confirmada. Usa a integração do backend, sem chave OpenAI no runner. Não contorna autenticação de deployment; se a proteção impedir o runner, o teste relata o bloqueio. Não usa foto pessoal nem faz retry de criação. Há até três tentativas de limpeza, inclusive após falha.
 
 Não habilitar logs de payloads, cabeçalhos, cookie ou imagem. APIs têm `Cache-Control: no-store` e erros sanitizados. A visão pode ler dados pessoais dos pixels; remover EXIF não anonimiza uma foto.
 

@@ -27,6 +27,8 @@ import {
   type Snapshot,
 } from './provider';
 import { demoProvider } from './demo';
+import { logFailure, snapshotDiagnostic, withDiagnostics } from './diagnostics';
+import { normalizeProviderError, ProviderError } from './provider-error';
 
 const empty: AnalysisData = {
   evidence: [],
@@ -66,6 +68,7 @@ function selectProvider(): AgentsProvider {
   );
 }
 type Loaded = {
+  failure?: AppError;
   initial: InitialContext;
   analysis: AnalysisData;
   research: ResearchData | null;
@@ -78,15 +81,19 @@ export function createApi(
   providerFactory: () => AgentsProvider = selectProvider,
   now = () => Date.now(),
 ) {
-  return async function handle(
+  async function handle(
     req: Request,
-    endpoint: 'create' | 'get' | 'advance' | 'region' | 'cancel' | 'delete' | 'config',
+    endpoint: 'create' | 'get' | 'advance' | 'region' | 'cancel' | 'delete' | 'config' | 'events',
   ): Promise<Response> {
     let manifest: Manifest | null = null;
+    let submissionAttempted = false;
     try {
-      guard(req, !['get', 'config'].includes(endpoint));
+      guard(req, !['get', 'config', 'events'].includes(endpoint));
       if (endpoint === 'config')
         return jsonResponse({
+          revision: /^[a-f0-9]{40}$/i.test(process.env.VERCEL_GIT_COMMIT_SHA ?? '')
+            ? process.env.VERCEL_GIT_COMMIT_SHA
+            : 'local',
           mode: process.env.OPSEC_PROVIDER === 'demo' && !process.env.VERCEL ? 'demo' : 'openai',
           available:
             (process.env.OPSEC_PROVIDER === 'demo' && !process.env.VERCEL) ||
@@ -96,6 +103,10 @@ export function createApi(
           limits: LIMITS,
         });
       const provider = providerFactory();
+      const start: AgentsProvider['start'] = async (request) => {
+        submissionAttempted = true;
+        return provider.start(request);
+      };
       if (endpoint === 'create') {
         try {
           if (readManifest(req, true))
@@ -145,7 +156,7 @@ export function createApi(
           cancellation: 'none',
           deletion: {},
         };
-        manifest.visualId = await provider.start({
+        manifest.visualId = await start({
           stage: 'analysis',
           data: { image: initial.image, context, authorizedAt: initial.authorizedAt },
           image: image.dataUrl,
@@ -182,6 +193,45 @@ export function createApi(
           'O modo mudou desde a criação do caso. Retome com a configuração anterior para encerrar as sessões.',
           409,
         );
+      if (endpoint === 'events') {
+        const id = m.stage === 'research' ? m.researchId : m.visualId;
+        if (!id || !provider.events) return jsonResponse({ events: false }, 200);
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 20_000);
+        const signal = AbortSignal.any([req.signal, controller.signal]);
+        const encoder = new TextEncoder();
+        const stream = new ReadableStream({
+          async start(target) {
+            try {
+              for await (const event of provider.events!(id, signal)) {
+                if (signal.aborted) break;
+                target.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+              }
+            } catch {
+              if (!signal.aborted)
+                target.enqueue(encoder.encode('data: {"type":"observer_unavailable"}\n\n'));
+            } finally {
+              clearTimeout(timer);
+              try {
+                target.close();
+              } catch {
+                /* disconnected observer */
+              }
+            }
+          },
+          cancel() {
+            controller.abort();
+            clearTimeout(timer);
+          },
+        });
+        return new Response(stream, {
+          headers: {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-store',
+            'X-Accel-Buffering': 'no',
+          },
+        });
+      }
       if (endpoint === 'delete') {
         for (const id of [m.visualId, m.researchId].filter(Boolean) as string[]) {
           if (m.deletion[id] === 'deleted') continue;
@@ -199,7 +249,9 @@ export function createApi(
           }
         }
         const done = Object.values(m.deletion).every((s) => s === 'deleted');
-        const unknown = !m.visualId || (m.stage === 'research' && m.rounds > 0 && !m.researchId);
+        const unknown =
+          m.remoteCreationUnknown ??
+          (!m.visualId || (m.stage === 'research' && m.rounds > 0 && !m.researchId));
         return jsonResponse(
           {
             closed: done,
@@ -341,7 +393,7 @@ export function createApi(
         m.priorFingerprint = fingerprint(loaded.analysis);
         m.lastTurnId = loaded.visual.turnId;
         m.questionAttempts[question.id] = (m.questionAttempts[question.id] ?? 0) + 1;
-        await submit(provider, m, {
+        await submit(start, m, {
           stage: 'region',
           sessionId: m.visualId,
           image: image.dataUrl,
@@ -371,7 +423,7 @@ export function createApi(
             throw new AppError('INVALID_PHASE', 'Revise as sementes antes da busca.', 409);
           if (budgetStop) {
             m.stopReason = budgetStop;
-            await synthesize(provider, m, loaded);
+            await synthesize(start, m, loaded);
           } else {
             const domains = (action.domains ?? []).map((s) => s.toLowerCase().trim());
             const seeds = approveSeeds(loaded.analysis, action.seedIds ?? [], domains).map((s) => ({
@@ -382,12 +434,12 @@ export function createApi(
             m.allowedDomains = domains;
             if (!seeds.length) {
               m.stopReason = 'no_useful_action';
-              await synthesize(provider, m, loaded);
+              await synthesize(start, m, loaded);
             } else {
               m.rounds++;
               m.lastTurnId = '';
               m.priorFingerprint = fingerprint(loaded.analysis, loaded.research);
-              await submit(provider, m, {
+              await submit(start, m, {
                 stage: 'research',
                 data: {
                   seeds,
@@ -421,7 +473,7 @@ export function createApi(
               ...s,
               purpose: 'Encontrar contexto público para o sinal aprovado, sem investigar pessoas.',
             }));
-          await submit(provider, m, {
+          await submit(start, m, {
             stage: 'research',
             sessionId: m.researchId,
             data: {
@@ -444,29 +496,43 @@ export function createApi(
               : loaded.analysis.questions.some((q) => q.status === 'open')
                 ? 'no_useful_action'
                 : 'sufficient_evidence');
-          await synthesize(provider, m, loaded);
+          await synthesize(start, m, loaded);
         }
       }
       return jsonResponse({ ...view(m, loaded, provider.model), report: null }, 202, m);
     } catch (e) {
-      const error =
-        e instanceof AppError
-          ? e
-          : new AppError(
-              'PROVIDER_FAILURE',
-              'A operação não foi confirmada. Consulte o estado do caso antes de tentar novamente.',
-              502,
-            );
+      const error = normalizeProviderError(e);
+      if (
+        submissionAttempted &&
+        error instanceof ProviderError &&
+        error.definitive &&
+        manifest?.phase === 'uncertain'
+      ) {
+        if (!manifest.visualId) manifest = null;
+        else {
+          manifest.remoteCreationUnknown = false;
+          manifest.phase = 'partial';
+          manifest.stopReason = 'provider_failure';
+        }
+      } else if (
+        manifest?.phase === 'uncertain' &&
+        (!manifest.visualId || (manifest.stage === 'research' && !manifest.researchId))
+      )
+        manifest.remoteCreationUnknown = true;
+      logFailure(error);
       return jsonResponse(
         {
           error: { code: error.code, message: error.message },
+          diagnostic: snapshotDiagnostic(error),
           uncertain: manifest?.phase === 'uncertain',
         },
         error.status,
         manifest,
       );
     }
-  };
+  }
+  return (req: Request, endpoint: Parameters<typeof handle>[1]) =>
+    withDiagnostics(req, endpoint, () => handle(req, endpoint));
 }
 
 async function load(p: AgentsProvider, m: Manifest): Promise<Loaded> {
@@ -482,6 +548,7 @@ async function load(p: AgentsProvider, m: Manifest): Promise<Loaded> {
   let search: Snapshot | null = null,
     research: ResearchData | null = null,
     error: string | null = null;
+  let failure = visual.failure;
   let analysis: AnalysisData = {
     ...empty,
     evidence: initial.image.metadata
@@ -524,7 +591,9 @@ async function load(p: AgentsProvider, m: Manifest): Promise<Loaded> {
           search.visitedUrls,
         );
       }
-    } catch {
+    } catch (cause) {
+      failure = normalizeProviderError(cause);
+      logFailure(failure);
       error =
         'A pesquisa não pôde ser validada/recuperada. Os resultados visuais permanecem disponíveis.';
       m.phase = 'partial';
@@ -562,7 +631,14 @@ async function load(p: AgentsProvider, m: Manifest): Promise<Loaded> {
       m.stopReason = 'policy_violation';
     }
   }
-  return { initial, analysis, research, synthesis, visual, search, error };
+  if (search?.failure) failure = search.failure;
+  if (failure) {
+    error = failure.message;
+    m.phase = 'partial';
+    m.stopReason = 'provider_failure';
+    logFailure(failure);
+  }
+  return { initial, analysis, research, synthesis, visual, search, error, failure };
 }
 function reconcile(m: Manifest, l: Loaded, now: number) {
   if (
@@ -627,13 +703,13 @@ function reconcile(m: Manifest, l: Loaded, now: number) {
     }
   }
 }
-async function submit(p: AgentsProvider, m: Manifest, req: ProviderRequest) {
+async function submit(start: AgentsProvider['start'], m: Manifest, req: ProviderRequest) {
   m.stage = req.stage;
   m.pendingKey = req.key;
   m.phase = 'uncertain';
   m.pendingStartedAt = Date.now();
   try {
-    const id = await p.start(req);
+    const id = await start(req);
     if (req.stage === 'research') m.researchId = id;
     m.phase =
       req.stage === 'research'
@@ -641,7 +717,8 @@ async function submit(p: AgentsProvider, m: Manifest, req: ProviderRequest) {
         : req.stage === 'synthesis'
           ? 'synthesizing'
           : 'analyzing';
-  } catch {
+  } catch (error) {
+    if (error instanceof ProviderError) throw error;
     throw new AppError(
       'ACTION_UNCERTAIN',
       'O provedor não confirmou a operação. Acompanhe o estado; não haverá reenvio automático.',
@@ -649,10 +726,10 @@ async function submit(p: AgentsProvider, m: Manifest, req: ProviderRequest) {
     );
   }
 }
-async function synthesize(p: AgentsProvider, m: Manifest, l: Loaded) {
+async function synthesize(start: AgentsProvider['start'], m: Manifest, l: Loaded) {
   m.lastTurnId = l.visual.turnId;
   const findings = [...l.analysis.findings, ...(l.research?.findings ?? [])];
-  await submit(p, m, {
+  await submit(start, m, {
     stage: 'synthesis',
     sessionId: m.visualId,
     data: {
@@ -681,6 +758,13 @@ function view(m: Manifest, l: Loaded, model: string): CaseView {
       )
     : null;
   return {
+    diagnostic: snapshotDiagnostic(l.failure),
+    execution: {
+      sessionStatus: (m.stage === 'research' ? l.search : l.visual)?.status ?? 'unknown',
+      turnStatus: (m.stage === 'research' ? l.search : l.visual)?.turnStatus ?? 'unknown',
+      toolCalls: l.search?.toolCalls ?? 0,
+      checkedAt: new Date().toISOString(),
+    },
     caseId: m.caseId,
     mode: m.provider,
     phase: m.phase,

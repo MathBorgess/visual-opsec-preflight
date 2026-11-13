@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import sharp from 'sharp';
+import { randomFillSync } from 'node:crypto';
+import { LIMITS } from '@/lib/contracts';
+import { preflightImage } from '@/lib/upload';
 import { processImage } from '@/server/image';
 
 describe('parser e derivada reais', () => {
@@ -34,6 +37,35 @@ describe('parser e derivada reais', () => {
     })
       .png()
       .toBuffer();
-    await expect(processImage(png)).rejects.toMatchObject({ code: 'CORRUPT_IMAGE' });
+    await expect(processImage(png)).rejects.toMatchObject({
+      code: 'IMAGE_DIMENSIONS',
+      details: { bounds: { actual: 16_400_000, maximum: 16_000_000, width: 4100, height: 4000 } },
+    });
+    await expect(
+      preflightImage(new File([new Uint8Array(png)], 'fixture.png')),
+    ).rejects.toMatchObject({ code: 'IMAGE_DIMENSIONS' });
+  });
+  it('aceita foto detalhada abaixo de 3 MiB e reduz resolução até respeitar imagem inline', async () => {
+    const bytes = randomFillSync(Buffer.alloc(2048 * 2048 * 3));
+    const input = await sharp(bytes, { raw: { width: 2048, height: 2048, channels: 3 } })
+      .jpeg({ quality: 70 })
+      .withExif({ IFD0: { Artist: 'PRIVATE_FIXTURE', Make: 'Synthetic Camera' } })
+      .toBuffer();
+    expect(input.length).toBeLessThan(LIMITS.bytes);
+    const result = await processImage(input);
+    const output = Buffer.from(result.dataUrl.split(',')[1], 'base64');
+    const metadata = await sharp(output).metadata();
+    expect(output.length).toBeLessThanOrEqual(LIMITS.derivative);
+    expect(result.dataUrl.length).toBeLessThanOrEqual(LIMITS.imageUrlChars);
+    expect(result.info.derivedWidth).toBeLessThan(2048);
+    expect(result.info.metadata.find((row) => row.field === 'Autoria/identificadores')?.state).toBe(
+      'present',
+    );
+    expect(metadata.exif).toBeUndefined();
+    expect(metadata.xmp).toBeUndefined();
+    expect(JSON.stringify(result.info)).not.toContain('PRIVATE_FIXTURE');
+    await expect(
+      preflightImage(new File([new Uint8Array(input)], 'fixture.jpg')),
+    ).resolves.toMatchObject({ width: 2048, height: 2048 });
   });
 });

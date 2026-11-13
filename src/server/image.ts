@@ -11,6 +11,7 @@ import {
   validBox,
 } from '@/lib/contracts';
 import { minimize } from '@/lib/policy';
+import { diagnosticEvent } from './diagnostics';
 
 function pngAnimated(buf: Buffer) {
   let offset = 8;
@@ -27,8 +28,14 @@ export async function processImage(
   bytes: Buffer,
   bbox?: BoxData,
 ): Promise<{ info: ImageInfo; dataUrl: string }> {
+  diagnosticEvent('image_validation', { bytes: bytes.length });
   if (!bytes.length || bytes.length > LIMITS.bytes)
-    throw new AppError('IMAGE_SIZE', 'A foto deve ter até 3 MiB.');
+    throw new AppError(
+      'IMAGE_SIZE',
+      `A foto tem ${bytes.length} bytes; o limite é ${LIMITS.bytes} bytes (3 MiB).`,
+      400,
+      { bounds: { name: 'bytes', actual: bytes.length, maximum: LIMITS.bytes } },
+    );
   const png = bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
   const jpeg = bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255;
   if (!png && !jpeg) throw new AppError('IMAGE_FORMAT', 'Selecione um JPEG ou PNG estático.');
@@ -36,7 +43,9 @@ export async function processImage(
     throw new AppError('ANIMATION', 'Imagens animadas não são aceitas.');
   try {
     const meta = await sharp(bytes, {
-      limitInputPixels: LIMITS.pixels,
+      // Header inspection does not decode the raster. Check dimensions explicitly
+      // before the bounded decoder, so excess pixels are never called corruption.
+      limitInputPixels: false,
       failOn: 'warning',
     }).metadata();
     if (
@@ -46,7 +55,25 @@ export async function processImage(
       !meta.height ||
       meta.width * meta.height > LIMITS.pixels
     )
-      throw new AppError('IMAGE_DIMENSIONS', 'A imagem deve ser estática e ter até 16 megapixels.');
+      throw new AppError(
+        'IMAGE_DIMENSIONS',
+        `A imagem mede ${meta.width ?? 0} × ${meta.height ?? 0}; o limite é 16 milhões de pixels, em imagem estática.`,
+        400,
+        {
+          bounds: {
+            name: 'pixels',
+            actual: (meta.width ?? 0) * (meta.height ?? 0),
+            maximum: LIMITS.pixels,
+            width: meta.width,
+            height: meta.height,
+          },
+        },
+      );
+    diagnosticEvent('metadata', {
+      width: meta.width,
+      height: meta.height,
+      pixels: meta.width * meta.height,
+    });
     const rows: MetadataRow[] = [];
     const limitations: string[] = [
       'Metadados podem ser alterados. Ausência não demonstra ausência de exposição.',
@@ -121,6 +148,7 @@ export async function processImage(
           'Inventário completo de chunks de texto PNG não é suportado pelo extrator; a derivada não os copia.',
         private: false,
       });
+    diagnosticEvent('normalization');
     const oriented = await sharp(bytes, { limitInputPixels: LIMITS.pixels, failOn: 'warning' })
       .rotate()
       .flatten({ background: '#ffffff' })
@@ -139,22 +167,58 @@ export async function processImage(
         height: Math.max(1, Math.min(height - top, Math.ceil(bbox[3] * height))),
       });
     }
-    const resized = pipeline.resize({
-      width: 2048,
-      height: 2048,
-      fit: 'inside',
-      withoutEnlargement: true,
-    });
-    let result = await resized.clone().jpeg({ quality: 82 }).toBuffer({ resolveWithObject: true });
-    if (result.data.length > LIMITS.derivative) {
-      result = await resized.clone().jpeg({ quality: 55 }).toBuffer({ resolveWithObject: true });
-      limitations.push('Derivada comprimida adicionalmente; detalhes pequenos podem se perder.');
+    const attempts = [
+      [2048, 82],
+      [2048, 55],
+      [1536, 65],
+      [1024, 65],
+      [768, 65],
+      [512, 60],
+    ] as const;
+    let result;
+    let attempt = 0;
+    for (const [edge, quality] of attempts) {
+      result = await pipeline
+        .clone()
+        .resize({ width: edge, height: edge, fit: 'inside', withoutEnlargement: true })
+        .jpeg({ quality })
+        .toBuffer({ resolveWithObject: true });
+      diagnosticEvent('normalization', {
+        attempt: ++attempt,
+        edge,
+        quality,
+        bytes: result.data.length,
+      });
+      if (result.data.length <= LIMITS.derivative) break;
     }
-    if (result.data.length > LIMITS.derivative)
+    if (!result || result.data.length > LIMITS.derivative)
       throw new AppError(
         'DERIVATIVE_SIZE',
-        'A imagem ainda excede o limite após compressão; selecione uma cópia menor.',
+        'A derivada excede 700 KiB após as tentativas de compressão. Copie o diagnóstico.',
+        400,
+        {
+          bounds: {
+            name: 'derivativeBytes',
+            actual: result?.data.length ?? 0,
+            maximum: LIMITS.derivative,
+          },
+        },
       );
+    if (attempt > 1)
+      limitations.push(
+        `Derivada adaptada para ${result.info.width} × ${result.info.height}; detalhes pequenos podem se perder e merecer recorte.`,
+      );
+    const dataUrl = 'data:image/jpeg;base64,' + result.data.toString('base64');
+    if (dataUrl.length > LIMITS.imageUrlChars)
+      throw new AppError('IMAGE_URL_SIZE', 'A imagem inline excede o contrato da OpenAI.', 400, {
+        bounds: { name: 'imageUrlChars', actual: dataUrl.length, maximum: LIMITS.imageUrlChars },
+      });
+    diagnosticEvent('image_ready', {
+      derivedWidth: result.info.width,
+      derivedHeight: result.info.height,
+      derivedBytes: result.data.length,
+      imageUrlChars: dataUrl.length,
+    });
     return {
       info: {
         width,
@@ -166,7 +230,7 @@ export async function processImage(
         metadata: rows,
         limitations,
       },
-      dataUrl: 'data:image/jpeg;base64,' + result.data.toString('base64'),
+      dataUrl,
     };
   } catch (e) {
     if (e instanceof AppError) throw e;

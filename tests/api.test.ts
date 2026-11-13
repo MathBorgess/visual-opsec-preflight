@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import sharp from 'sharp';
 import piexif from 'piexifjs';
 import { createApi } from '@/server/api';
@@ -7,6 +7,7 @@ import { readManifest, signManifest } from '@/server/security';
 import { reportMarkdown } from '@/lib/report';
 import { Analysis, LIMITS, type CaseView, type Manifest } from '@/lib/contracts';
 import type { ProviderRequest, Snapshot } from '@/server/provider';
+import { ProviderError } from '@/server/provider-error';
 
 let photo: Buffer;
 let different: Buffer;
@@ -111,6 +112,50 @@ async function toReview(h = harness()) {
 }
 
 describe('API do caso — jornada e fronteiras', () => {
+  it('gera diagnóstico e log sanitizado antes de criar caso ou chamar o provedor', async () => {
+    const logs = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const h = harness();
+      const result = await h.call('create', form(Buffer.alloc(LIMITS.bytes + 1)));
+      expect(result.data.diagnostic).toMatchObject({
+        stage: 'image_validation',
+        code: 'IMAGE_SIZE',
+        providerInvoked: false,
+        bounds: { actual: LIMITS.bytes + 1, maximum: LIMITS.bytes },
+      });
+      expect(result.headers.get('x-opsec-request-id')).toBe(result.data.diagnostic.requestId);
+      expect(result.headers.get('set-cookie')).toBeNull();
+      expect(h.provider.calls).toHaveLength(0);
+      const log = logs.mock.calls.flat().join(' ');
+      expect(log).toContain(result.data.diagnostic.requestId);
+      expect(log).not.toContain('PRIVATE_CONTEXT');
+      expect(log).not.toContain('personal-name.jpg');
+    } finally {
+      logs.mockRestore();
+    }
+  });
+  it('rejeição OpenAI confirmada não cria referência incerta e permite nova tentativa manual', async () => {
+    class Rejected extends DemoProvider {
+      async start(): Promise<string> {
+        throw new ProviderError('OPENAI_INVALID_REQUEST', 'Parâmetro rejeitado.', 502, true, {
+          status: 400,
+          code: 'invalid_request_error',
+          param: 'agent.text.format',
+          requestId: 'req_fixture',
+        });
+      }
+    }
+    const h = harness(new Rejected());
+    const result = await h.call('create', form());
+    expect(result.status).toBe(502);
+    expect(result.data.uncertain).toBe(false);
+    expect(result.data.diagnostic.provider).toMatchObject({
+      requestId: 'req_fixture',
+      status: 400,
+    });
+    expect(result.headers.get('set-cookie')).toBeNull();
+    expect((await h.call('create', form())).data.error.code).toBe('OPENAI_INVALID_REQUEST');
+  });
   it.each(['completed', 'partial'] as const)(
     'dossiê %s preserva caixas decimais e números ao minimizar textos privados',
     async (status) => {
@@ -410,6 +455,56 @@ describe('API do caso — jornada e fronteiras', () => {
     expect(close.data.remoteDeletionConfirmed).toBe(false);
     expect(close.data.message).toContain('sem ID');
     expect(h.provider.calls).toHaveLength(1);
+  });
+  it('falha remota persistida chega ao documento parcial e ao diagnóstico exportável', async () => {
+    class FailedTurn extends DemoProvider {
+      async read(id: string) {
+        const s = await super.read(id);
+        return {
+          ...s,
+          status: 'failed',
+          turnStatus: 'failed',
+          failure: new ProviderError('OPENAI_TURN_FAILED', 'Turno falhou.', 502, true, {
+            code: 'rate_limit_exceeded',
+            sessionId: id,
+            turnId: s.turnId,
+          }),
+        };
+      }
+    }
+    const h = harness(new FailedTurn());
+    await h.call('create', form());
+    const v = await h.call('get');
+    expect(v.data.phase).toBe('partial');
+    expect(v.data.report).not.toBeNull();
+    expect(v.data.diagnostic).toMatchObject({
+      code: 'OPENAI_TURN_FAILED',
+      provider: { code: 'rate_limit_exceeded' },
+    });
+    expect(v.data.execution.turnStatus).toBe('failed');
+  });
+  it('erro de consulta não confirma exclusão de uma criação de pesquisa sem ID', async () => {
+    class UnknownResearch extends DemoProvider {
+      failed = false;
+      async start(r: ProviderRequest) {
+        if (r.stage === 'research') {
+          this.failed = true;
+          throw new ProviderError('OPENAI_TIMEOUT', 'Criação não confirmada.', 504, false, {});
+        }
+        return super.start(r);
+      }
+      async read(id: string) {
+        if (this.failed)
+          throw new ProviderError('OPENAI_RATE_LIMIT', 'Consulta limitada.', 429, true, {});
+        return super.read(id);
+      }
+    }
+    const h = await toReview(harness(new UnknownResearch()));
+    expect((await h.call('advance', { action: 'search', seedIds: ['S1'] })).status).toBe(504);
+    expect((await h.call('get')).status).toBe(429);
+    const closed = await h.call('delete');
+    expect(closed.data).toMatchObject({ closed: true, remoteDeletionConfirmed: false });
+    expect(closed.data.message).toContain('sem ID confirmado');
   });
   it('resposta visual malformada mantém inventário e encerra com documento parcial', async () => {
     class Malformed extends DemoProvider {

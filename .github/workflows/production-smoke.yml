@@ -1,0 +1,23 @@
+name: Production synthetic check
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'opsec-live-check-*'
+permissions:
+  contents: read
+jobs:
+  synthetic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: One synthetic case against the deployed revision
+        run: node scripts/production-smoke.mjs
+        env:
+          EXPECTED_REVISION: ${{ github.sha }}

@@ -2,7 +2,7 @@
 
 Uma foto como ponto de entrada para uma curadoria educativa de exposição virtual: o que aparece nos pixels, o que o arquivo registra e o que fontes públicas permitem correlacionar.
 
-> **Estado: aplicação implementada e verificada localmente.** Integração com Agents API implementada e testada com SDK real sobre transporte controlado. Deployment, secrets e validação ao vivo ficam para a etapa final; não há qualidade/latência real demonstrada.
+> **Estado: aplicação implantada na Vercel.** A correção dos limites de upload inclui normalização adaptativa, progresso e diagnóstico correlacionável. A validação local usa SDK real com transporte controlado e modo demo; resultados de verificação ao vivo devem ser conferidos na execução explícita do teste de produção.
 
 ## Executar localmente sem chave
 
@@ -20,7 +20,7 @@ npm run check
 OPSEC_E2E_PRODUCTION=1 npm run test:e2e
 ```
 
-O segundo comando usa o build gerado pelo primeiro e Chromium em `/usr/bin/chromium`. Para outro caminho, use `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`. Alternativamente, execute `npx playwright install chromium` e defina `PLAYWRIGHT_USE_BUNDLED_CHROMIUM=true`. Sem a variável de produção, o teste inicia o servidor de desenvolvimento. A CI está preparada; sua execução remota não foi verificada nesta entrega.
+O segundo comando usa o build gerado pelo primeiro e Chromium em `/usr/bin/chromium`. Para outro caminho, use `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`. Alternativamente, execute `npx playwright install chromium` e defina `PLAYWRIGHT_USE_BUNDLED_CHROMIUM=true`. Sem a variável de produção, o teste inicia o servidor de desenvolvimento. A CI executa os mesmos checks e a jornada em navegador, sem chamadas OpenAI.
 
 Veja o [guia de operação e secrets](docs/local-operation.md) e a [rastreabilidade da implementação](docs/implementation-status.md).
 
@@ -42,13 +42,13 @@ Premissa de desenho: primeira versão privada para uso do autor e preparação d
 6. Ler o documento de exposição virtual com evidências, fontes, contradições, limites e recomendações.
 7. Exportar o documento e encerrar o caso, com estado explícito da exclusão das sessões remotas.
 
-A chave `OPENAI_API_KEY` será uma variável **Secret** do projeto Vercel, acessível ao backend. Nenhum valor será colocado no repositório, navegador ou contexto do agente.
+A chave `OPENAI_API_KEY` é configurada como variável **Secret** do projeto Vercel, acessível ao backend. Nenhum valor será colocado no repositório, navegador ou contexto do agente.
 
 ## Documentos do desenho
 
 - [Spec to-spec: 46 histórias e 12 atividades](docs/TO-SPEC.md)
 - [Entrega local e evidências por atividade/requisito](docs/implementation-status.md)
-- [Operação local e configuração final pendente](docs/local-operation.md)
+- [Operação, diagnóstico e configuração](docs/local-operation.md)
 
 - [Arquitetura e implantação proposta](docs/architecture.md)
 - [Requisitos funcionais e critérios de aceite](docs/requirements.md)
