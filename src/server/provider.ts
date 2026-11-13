@@ -216,18 +216,29 @@ export class OpenAIAgentsProvider implements AgentsProvider {
         )
           visitedUrls.push(item.action.url);
         if (item.type !== 'message') continue;
-        const txt = item.content
+        const textParts = item.content
           .filter((c) => c.type === 'input_text' || c.type === 'output_text')
-          .map((c) => c.text)
-          .join('');
+          .map((c) => c.text);
+        const txt = textParts.join('');
         if (item.role === 'user') {
           history.userMessages++;
           history.inputTextChars += txt.length;
-          try {
-            const parsed = JSON.parse(txt);
-            if (record(parsed)) requests.push(parsed);
-          } catch {
-            history.parseFailures++;
+          // A multimodal message can contain independent text parts. Do not
+          // corrupt the checkpoint by concatenating it with an image annotation.
+          for (const candidate of [...textParts, ...(textParts.length > 1 ? [txt] : [])]) {
+            try {
+              let parsed = parseJSON(candidate);
+              if (typeof parsed === 'string') parsed = parseJSON(parsed);
+              if (
+                record(parsed) &&
+                ['analysis', 'region', 'research', 'synthesis'].includes(String(parsed.kind))
+              ) {
+                requests.push(parsed);
+                break;
+              }
+            } catch {
+              history.parseFailures++;
+            }
           }
         } else if (item.phase === 'final_answer' && item.status === 'completed') {
           let parsed: unknown;
