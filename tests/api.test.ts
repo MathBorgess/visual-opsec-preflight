@@ -483,6 +483,29 @@ describe('API do caso — jornada e fronteiras', () => {
     });
     expect(v.data.execution.turnStatus).toBe('failed');
   });
+  it('erro de consulta não confirma exclusão de uma criação de pesquisa sem ID', async () => {
+    class UnknownResearch extends DemoProvider {
+      failed = false;
+      async start(r: ProviderRequest) {
+        if (r.stage === 'research') {
+          this.failed = true;
+          throw new ProviderError('OPENAI_TIMEOUT', 'Criação não confirmada.', 504, false, {});
+        }
+        return super.start(r);
+      }
+      async read(id: string) {
+        if (this.failed)
+          throw new ProviderError('OPENAI_RATE_LIMIT', 'Consulta limitada.', 429, true, {});
+        return super.read(id);
+      }
+    }
+    const h = await toReview(harness(new UnknownResearch()));
+    expect((await h.call('advance', { action: 'search', seedIds: ['S1'] })).status).toBe(504);
+    expect((await h.call('get')).status).toBe(429);
+    const closed = await h.call('delete');
+    expect(closed.data).toMatchObject({ closed: true, remoteDeletionConfirmed: false });
+    expect(closed.data.message).toContain('sem ID confirmado');
+  });
   it('resposta visual malformada mantém inventário e encerra com documento parcial', async () => {
     class Malformed extends DemoProvider {
       async read(id: string) {

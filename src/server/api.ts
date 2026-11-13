@@ -86,6 +86,7 @@ export function createApi(
     endpoint: 'create' | 'get' | 'advance' | 'region' | 'cancel' | 'delete' | 'config' | 'events',
   ): Promise<Response> {
     let manifest: Manifest | null = null;
+    let submissionAttempted = false;
     try {
       guard(req, !['get', 'config', 'events'].includes(endpoint));
       if (endpoint === 'config')
@@ -102,6 +103,10 @@ export function createApi(
           limits: LIMITS,
         });
       const provider = providerFactory();
+      const start: AgentsProvider['start'] = async (request) => {
+        submissionAttempted = true;
+        return provider.start(request);
+      };
       if (endpoint === 'create') {
         try {
           if (readManifest(req, true))
@@ -151,7 +156,7 @@ export function createApi(
           cancellation: 'none',
           deletion: {},
         };
-        manifest.visualId = await provider.start({
+        manifest.visualId = await start({
           stage: 'analysis',
           data: { image: initial.image, context, authorizedAt: initial.authorizedAt },
           image: image.dataUrl,
@@ -388,7 +393,7 @@ export function createApi(
         m.priorFingerprint = fingerprint(loaded.analysis);
         m.lastTurnId = loaded.visual.turnId;
         m.questionAttempts[question.id] = (m.questionAttempts[question.id] ?? 0) + 1;
-        await submit(provider, m, {
+        await submit(start, m, {
           stage: 'region',
           sessionId: m.visualId,
           image: image.dataUrl,
@@ -418,7 +423,7 @@ export function createApi(
             throw new AppError('INVALID_PHASE', 'Revise as sementes antes da busca.', 409);
           if (budgetStop) {
             m.stopReason = budgetStop;
-            await synthesize(provider, m, loaded);
+            await synthesize(start, m, loaded);
           } else {
             const domains = (action.domains ?? []).map((s) => s.toLowerCase().trim());
             const seeds = approveSeeds(loaded.analysis, action.seedIds ?? [], domains).map((s) => ({
@@ -429,12 +434,12 @@ export function createApi(
             m.allowedDomains = domains;
             if (!seeds.length) {
               m.stopReason = 'no_useful_action';
-              await synthesize(provider, m, loaded);
+              await synthesize(start, m, loaded);
             } else {
               m.rounds++;
               m.lastTurnId = '';
               m.priorFingerprint = fingerprint(loaded.analysis, loaded.research);
-              await submit(provider, m, {
+              await submit(start, m, {
                 stage: 'research',
                 data: {
                   seeds,
@@ -468,7 +473,7 @@ export function createApi(
               ...s,
               purpose: 'Encontrar contexto público para o sinal aprovado, sem investigar pessoas.',
             }));
-          await submit(provider, m, {
+          await submit(start, m, {
             stage: 'research',
             sessionId: m.researchId,
             data: {
@@ -491,13 +496,18 @@ export function createApi(
               : loaded.analysis.questions.some((q) => q.status === 'open')
                 ? 'no_useful_action'
                 : 'sufficient_evidence');
-          await synthesize(provider, m, loaded);
+          await synthesize(start, m, loaded);
         }
       }
       return jsonResponse({ ...view(m, loaded, provider.model), report: null }, 202, m);
     } catch (e) {
       const error = normalizeProviderError(e);
-      if (error instanceof ProviderError && error.definitive && manifest?.phase === 'uncertain') {
+      if (
+        submissionAttempted &&
+        error instanceof ProviderError &&
+        error.definitive &&
+        manifest?.phase === 'uncertain'
+      ) {
         if (!manifest.visualId) manifest = null;
         else {
           manifest.remoteCreationUnknown = false;
@@ -693,13 +703,13 @@ function reconcile(m: Manifest, l: Loaded, now: number) {
     }
   }
 }
-async function submit(p: AgentsProvider, m: Manifest, req: ProviderRequest) {
+async function submit(start: AgentsProvider['start'], m: Manifest, req: ProviderRequest) {
   m.stage = req.stage;
   m.pendingKey = req.key;
   m.phase = 'uncertain';
   m.pendingStartedAt = Date.now();
   try {
-    const id = await p.start(req);
+    const id = await start(req);
     if (req.stage === 'research') m.researchId = id;
     m.phase =
       req.stage === 'research'
@@ -716,10 +726,10 @@ async function submit(p: AgentsProvider, m: Manifest, req: ProviderRequest) {
     );
   }
 }
-async function synthesize(p: AgentsProvider, m: Manifest, l: Loaded) {
+async function synthesize(start: AgentsProvider['start'], m: Manifest, l: Loaded) {
   m.lastTurnId = l.visual.turnId;
   const findings = [...l.analysis.findings, ...(l.research?.findings ?? [])];
-  await submit(p, m, {
+  await submit(start, m, {
     stage: 'synthesis',
     sessionId: m.visualId,
     data: {
