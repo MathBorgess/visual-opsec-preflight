@@ -1,6 +1,6 @@
 import OpenAI from 'openai';
 import sharp from 'sharp';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, randomFillSync } from 'node:crypto';
 
 // Explicit build-only probe. No customer input and no exported credential.
 if (process.env.OPSEC_SYNTHETIC_DIAGNOSTIC !== '1')
@@ -96,38 +96,113 @@ for (const id of (process.env.OPSEC_PROBE_CLEANUP_IDS ?? '').split(',').filter(B
 const firstProbe = Number(process.env.OPSEC_PROBE_START_AT ?? 0);
 if (!Number.isInteger(firstProbe) || firstProbe < 0 || firstProbe > 2)
   throw Error('Invalid probe selection.');
-for (const probe of probes.slice(firstProbe)) {
-  let id;
+if (process.env.OPSEC_PROBE_FULL_CASE === '1') {
+  const nativeFetch = globalThis.fetch;
+  globalThis.fetch = async (...args) => {
+    const response = await nativeFetch(...args);
+    if (String(args[0]).startsWith('https://api.openai.com/') && !response.ok) {
+      try {
+        const body = await response.clone().json();
+        log({
+          stage: 'static_full_request_error',
+          status: response.status,
+          code: body.error?.code,
+          param: body.error?.param,
+          requestId: response.headers.get('x-request-id'),
+          reason: reason({ status: response.status, message: String(body.error?.message ?? '') }),
+        });
+      } catch {
+        /* no raw body or headers */
+      }
+    }
+    return response;
+  };
+  let cookie = '';
+  const origin = 'https://visual-opsec-preflight.vercel.app';
+  const caseRoute = (await import('../.next/server/app/api/case/route.js')).routeModule.userland;
   try {
-    const result = await client.beta.agents.sessions
-      .create(
-        {
-          environment: { type: 'none' },
-          ...probe.body,
-          agent: {
-            model: process.env.OPENAI_MODEL,
-            instructions: 'Static synthetic integration test. Return a short answer.',
-            ...probe.body.agent,
-          },
-        },
-        { headers: { 'Idempotency-Key': randomUUID() } },
-      )
-      .withResponse();
-    id = result.data.id;
-    log({ stage: probe.name, accepted: true, sessionId: id, requestId: result.request_id });
-  } catch (error) {
+    const bytes = await sharp(randomFillSync(Buffer.alloc(2048 * 2048 * 3)), {
+      raw: { width: 2048, height: 2048, channels: 3 },
+    })
+      .jpeg({ quality: 70 })
+      .toBuffer();
+    const form = new FormData();
+    form.set('image', new Blob([bytes], { type: 'image/jpeg' }), 'synthetic.jpg');
+    form.set('consent', 'yes');
+    const handler = (await import('../.next/server/app/api/cases/route.js')).routeModule.userland
+      .POST;
+    const response = await handler(
+      new Request(origin + '/api/cases', {
+        method: 'POST',
+        headers: { Host: new URL(origin).host, Origin: origin },
+        body: form,
+      }),
+    );
+    cookie = response.headers.get('set-cookie')?.split(';')[0] ?? '';
+    const data = await response.json();
     log({
-      stage: probe.name,
-      accepted: false,
-      status: error.status,
-      code: error.code,
-      param: error.param,
-      requestId: error.requestID,
-      reason: reason(error),
+      stage: 'static_full_case',
+      status: response.status,
+      diagnostic: data.diagnostic,
+      error: data.error?.code,
     });
-    process.exitCode = 1;
+    if (!response.ok) process.exitCode = 1;
   } finally {
-    if (id && !(await cleanup(id))) process.exitCode = 1;
+    if (cookie) {
+      let confirmed = false;
+      for (let i = 0; i < 6; i++) {
+        const response = await caseRoute.DELETE(
+          new Request(origin + '/api/case', {
+            method: 'DELETE',
+            headers: { Host: new URL(origin).host, Origin: origin, Cookie: cookie },
+          }),
+        );
+        const set = response.headers.get('set-cookie');
+        if (set) cookie = set.split(';')[0];
+        const data = await response.json();
+        confirmed = data.closed && data.remoteDeletionConfirmed;
+        log({ stage: 'static_full_cleanup', confirmed });
+        if (confirmed) break;
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+      if (!confirmed) process.exitCode = 1;
+    }
+    globalThis.fetch = nativeFetch;
   }
-  if (process.exitCode) break;
+} else {
+  for (const probe of probes.slice(firstProbe)) {
+    let id;
+    try {
+      const result = await client.beta.agents.sessions
+        .create(
+          {
+            environment: { type: 'none' },
+            ...probe.body,
+            agent: {
+              model: process.env.OPENAI_MODEL,
+              instructions: 'Static synthetic integration test. Return a short answer.',
+              ...probe.body.agent,
+            },
+          },
+          { headers: { 'Idempotency-Key': randomUUID() } },
+        )
+        .withResponse();
+      id = result.data.id;
+      log({ stage: probe.name, accepted: true, sessionId: id, requestId: result.request_id });
+    } catch (error) {
+      log({
+        stage: probe.name,
+        accepted: false,
+        status: error.status,
+        code: error.code,
+        param: error.param,
+        requestId: error.requestID,
+        reason: reason(error),
+      });
+      process.exitCode = 1;
+    } finally {
+      if (id && !(await cleanup(id))) process.exitCode = 1;
+    }
+    if (process.exitCode) break;
+  }
 }
