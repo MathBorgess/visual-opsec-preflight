@@ -272,6 +272,25 @@ export function attachIdentity(
 }
 
 /** Shared presentation data: unavailable pages and homonyms cannot support an attribution. */
+export type SubjectLink = 'single_face' | 'multiple_faces' | 'no_face' | 'unknown';
+/**
+ * Exactly one visible face and a declared name: the name refers to that person
+ * by the author's declaration, never by facial recognition. Only then may the
+ * search start on its own; any other count waits for the author.
+ */
+export function subjectLink(facesVisible: number | null | undefined): SubjectLink {
+  if (facesVisible === null || facesVisible === undefined) return 'unknown';
+  return facesVisible === 1 ? 'single_face' : facesVisible > 1 ? 'multiple_faces' : 'no_face';
+}
+export const subjectLinkStatements: Record<SubjectLink, string> = {
+  single_face:
+    'Um único rosto na foto e um nome informado: a identidade refere-se a essa pessoa por declaração do autor, não por reconhecimento facial, o que permite a busca autônoma.',
+  multiple_faces:
+    'Mais de um rosto na foto: a identidade não foi associada a nenhum rosto e a busca autônoma não se aplica.',
+  no_face: 'Nenhum rosto visível: a busca autônoma não se aplica.',
+  unknown: 'Contagem de rostos indisponível: a busca autônoma não se aplica.',
+};
+
 export function attributedIdentityData(research: ResearchData | null) {
   const sources = (research?.sources ?? []).filter(
     (s) => s.exposure?.match === 'declared_identity' && s.retrievalState !== 'unavailable',

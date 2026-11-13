@@ -58,6 +58,7 @@ Todo caso novo declara uma identidade sob a autorização de identificação, e 
 | --- | --- |
 | `scope.identity` | Relação (`self`/`authorized`), nome, profissão, atividades e horário da autorização |
 | `scope.facesVisible` | Rostos visíveis contados pela análise; nenhum é identificado. Outras pessoas além da autorizada ficam fora da pesquisa e geram uma limitação |
+| `scope.subjectLink` | `single_face` (um rosto e um nome: a identidade refere-se a essa pessoa por declaração, condição da busca autônoma), `multiple_faces`, `no_face` ou `unknown` (identidade não associada a rosto; pesquisa com confirmação) |
 | `sources[].exposure` | Categoria (perfil profissional, produção acadêmica, página institucional, evento, imprensa, rede social, código/portfólio, processo ou diário oficial, outra), classes de dados visíveis (incluindo `legal_mention`) e `match` |
 | `identity.categories` / `identity.dataClasses` | Onde a identidade aparece e que dados ficam alcançáveis, com IDs das fontes atribuídas |
 | `identity.homonymSources` | Fontes marcadas como possível homônimo, fora da contagem |

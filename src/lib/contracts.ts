@@ -347,6 +347,7 @@ export type Report = {
     image: { width: number; height: number; format: string };
     identity: DeclaredIdentityData | null;
     facesVisible: number | null;
+    subjectLink: 'single_face' | 'multiple_faces' | 'no_face' | 'unknown';
   };
   summary: string;
   visual: AnalysisData['evidence'];

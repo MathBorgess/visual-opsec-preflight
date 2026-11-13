@@ -14,6 +14,8 @@ import {
   facetLabels,
   identityExposure,
   relationLabels,
+  subjectLink,
+  subjectLinkStatements,
 } from './identity';
 
 export function minimizeReport(report: Report): Report {
@@ -94,6 +96,7 @@ export function buildReport(
       },
       identity,
       facesVisible,
+      subjectLink: subjectLink(facesVisible),
     },
     summary:
       synthesis?.summary ??
@@ -205,7 +208,9 @@ export function reportMarkdown(r: Report): string {
     clean(r.scope.objective),
     'Rostos visíveis: ' +
       (r.scope.facesVisible ?? 'não informado') +
-      '. Somente a pessoa autorizada é pesquisada; nenhum rosto é usado para identificar.',
+      '. ' +
+      subjectLinkStatements[r.scope.subjectLink] +
+      ' Somente a pessoa autorizada é pesquisada; nenhum rosto é usado para identificar.',
     '## 2. Resumo de exposição',
     clean(r.summary),
     '## 3. O que a foto mostra',

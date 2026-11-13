@@ -1139,6 +1139,7 @@ describe('trilha de identidade autorizada', () => {
       breadth: 'high',
     });
     expect(report.scope.facesVisible).toBe(1);
+    expect(report.scope.subjectLink).toBe('single_face');
     expect(report.identity.discovered.map((d: { facet: string }) => d.facet)).toEqual([
       'profession',
       'employer',
@@ -1156,7 +1157,7 @@ describe('trilha de identidade autorizada', () => {
     expect(markdown.match(/^## [1-8]\./gm)).toHaveLength(8);
     expect(markdown).toContain('### 5.1 Exposição da identidade autorizada');
     expect(markdown).toContain('Amplitude observada: Alta');
-    expect(markdown).toContain('Rostos visíveis: 1');
+    expect(markdown).toContain('Rostos visíveis: 1. Um único rosto na foto e um nome informado');
     expect(markdown).toContain('Processo ou diário oficial: W5');
     expect(markdown).toContain('Organização: Instituto Exemplo (fictício) (W2)');
     expect(markdown).toContain('possível homônimo');
@@ -1244,6 +1245,8 @@ describe('trilha de identidade autorizada', () => {
     await h.call('advance', { action: 'synthesize' });
     const report = (await h.call('get')).data.report;
     expect(report.scope.facesVisible).toBe(3);
+    expect(report.scope.subjectLink).toBe('multiple_faces');
+    expect(reportMarkdown(report)).toContain('a busca autônoma não se aplica');
     expect(report.identity.limitations.join(' ')).toContain('2 outra(s) pessoa(s) visível(is)');
   });
   it('fonte de buscador de pessoas é descartada com os achados dependentes', async () => {

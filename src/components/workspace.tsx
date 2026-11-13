@@ -20,6 +20,8 @@ import {
   facetLabels,
   parseIdentityForm,
   relationLabels,
+  subjectLink,
+  subjectLinkStatements,
 } from '@/lib/identity';
 
 const AUTONOMOUS_SEARCH_SECONDS = 5;
@@ -386,6 +388,7 @@ export function Workspace() {
     return () => clearTimeout(timer);
   }, [auto, view, closed, busy, act, advance]);
   const facesVisible = view?.analysis.subjects?.facesVisible ?? 0;
+  const link = subjectLink(view?.analysis.subjects?.facesVisible);
   const autonomousSearch =
     !!view &&
     auto &&
@@ -393,7 +396,7 @@ export function Workspace() {
     !closed &&
     view.phase === 'awaiting_search_review' &&
     !!view.identity &&
-    facesVisible > 0;
+    link === 'single_face';
   const search = useCallback(
     () =>
       advance('search', {
@@ -1101,7 +1104,7 @@ export function Workspace() {
                 </p>
                 {autonomousSearch && countdown > 0 && (
                   <div className="notice autonomous" role="status" aria-live="polite">
-                    Rosto presente e autorizações concedidas: a pesquisa começa automaticamente em{' '}
+                    Um único rosto na foto e um nome informado: a pesquisa começa automaticamente em{' '}
                     {countdown}s com os sinais marcados e a identidade autorizada.{' '}
                     <button className="text-button" onClick={() => setHoldSearch(true)}>
                       Revisar antes de pesquisar
@@ -1111,7 +1114,14 @@ export function Workspace() {
                 {view.identity && holdSearch && (
                   <p className="muted">Busca autônoma pausada. Revise e pesquise quando quiser.</p>
                 )}
-                {view.identity && view.analysis.subjects && facesVisible === 0 && (
+                {view.identity && link === 'multiple_faces' && (
+                  <div className="notice" role="status">
+                    Há {facesVisible} rostos na foto: o nome não pode ser associado a uma pessoa
+                    específica, então a pesquisa aguarda a sua confirmação. Somente a pessoa
+                    autorizada será pesquisada.
+                  </div>
+                )}
+                {view.identity && link === 'no_face' && (
                   <p className="muted">
                     Nenhum rosto visível na foto: a pesquisa aguarda a sua revisão.
                   </p>
@@ -1312,8 +1322,9 @@ function ReportPanel({ report, onChange }: { report: Report; onChange: (r: Repor
       </p>
       {report.scope.facesVisible !== null && (
         <p className="muted">
-          Rostos visíveis: {report.scope.facesVisible}. Somente a pessoa autorizada é pesquisada;
-          nenhum rosto é usado para identificar.
+          Rostos visíveis: {report.scope.facesVisible}.{' '}
+          {subjectLinkStatements[report.scope.subjectLink]} Somente a pessoa autorizada é
+          pesquisada; nenhum rosto é usado para identificar.
         </p>
       )}
       <h3>2. Resumo de exposição</h3>

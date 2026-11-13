@@ -1009,7 +1009,7 @@ async function synthesize(start: AgentsProvider['start'], m: Manifest, l: Loaded
       instruction:
         'Sintetize sem buscar novamente. Não invente fontes nem promova hipótese. Preserve review=pending, correction="". questionResolutions encerra perguntas existentes com IDs de evidências válidos e motivo; só resolva se o critério de suficiência foi atendido. Registre inconclusive quando houve exploração sem resposta.' +
         (l.identity
-          ? ' Há identidade autorizada: o summary explica, conforme identityExposure, quanto dela ficou exposto, como foto e identidade se reforçam e quais ações reduzem a exposição. Achados sobre ela usam category=identity. Não trate possível homônimo como fato nem infira residência, rotina, localização atual ou atributos sensíveis.'
+          ? ' Há identidade autorizada: o summary explica, conforme identityExposure, quanto dela ficou exposto, como foto e identidade se reforçam e quais ações reduzem a exposição. Achados sobre ela usam category=identity. Com um único rosto em subjects, explique que foto e nome se referem à mesma pessoa por declaração do autor; com vários, não associe a identidade a nenhum rosto. Não trate possível homônimo como fato nem infira residência, rotina, localização atual ou atributos sensíveis.'
           : ''),
     },
     key: `${m.caseId}:synthesis`,

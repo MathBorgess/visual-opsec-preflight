@@ -6,6 +6,7 @@ import {
   identitySeeds,
   parseIdentityForm,
   readDeclaredIdentity,
+  subjectLink,
 } from '@/lib/identity';
 import { approveSeeds, minimize, validateResearch } from '@/lib/policy';
 import { demoAnalysis } from '@/server/demo';
@@ -112,6 +113,13 @@ describe('identidade declarada com autorização', () => {
     });
     expect(code(() => parseIdentityForm({}, at))).toBe('IDENTITY_REQUIRED');
     expect(readDeclaredIdentity(identity)).toEqual(identity);
+  });
+  it('só um rosto visível vincula o nome declarado à pessoa da foto', () => {
+    expect(subjectLink(1)).toBe('single_face');
+    expect(subjectLink(2)).toBe('multiple_faces');
+    expect(subjectLink(0)).toBe('no_face');
+    expect(subjectLink(null)).toBe('unknown');
+    expect(subjectLink(undefined)).toBe('unknown');
   });
   it('aceita a identidade fictícia usada pelos scripts de verificação ao vivo', () => {
     const fixture = { name: 'Personagem Sintetica Opsec', profession: 'fixture de teste' };

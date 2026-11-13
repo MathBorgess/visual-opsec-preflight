@@ -67,6 +67,41 @@ test('cartão ignora descobertas de homônimos e páginas indisponíveis, preser
   await page.getByRole('button', { name: 'Encerrar e excluir sessões' }).click();
 });
 
+test('com mais de um rosto a pesquisa aguarda confirmação, sem busca autônoma', async ({
+  page,
+}) => {
+  await page.route('**/api/case', async (route) => {
+    if (route.request().method() !== 'GET') return route.continue();
+    const response = await route.fetch();
+    if (!response.ok()) return route.fulfill({ response });
+    const data = (await response.json()) as CaseView;
+    if (data.analysis?.subjects)
+      data.analysis.subjects = { facesVisible: 2, note: 'Dois rostos fictícios.' };
+    await route.fulfill({ response, json: data });
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Usar imagem sintética de exemplo' }).click();
+  await prepareCase(page);
+  await page.getByRole('button', { name: 'Iniciar simulação' }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Quais sinais podem ser pesquisados?' }),
+  ).toBeVisible({ timeout: 30000 });
+  await expect(page.getByRole('status').filter({ hasText: 'Há 2 rostos na foto' })).toBeVisible();
+  await expect(page.getByRole('status').filter({ hasText: 'começa automaticamente' })).toHaveCount(
+    0,
+  );
+  // Longer than the countdown: nothing starts without the author.
+  await page.waitForTimeout(6000);
+  await expect(
+    page.getByRole('heading', { name: 'Quais sinais podem ser pesquisados?' }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Autorizar sinais e pesquisar' }).click();
+  await expect(page.getByRole('heading', { name: 'Seu dossiê, com limites claros.' })).toBeVisible({
+    timeout: 30000,
+  });
+  await page.getByRole('button', { name: 'Encerrar e excluir sessões' }).click();
+});
+
 test('fluxo principal com identidade: foto + nome + autorizações → exposição no dossiê', async ({
   page,
 }) => {

@@ -37,7 +37,7 @@ Premissa de desenho: primeira versão privada para uso do autor e preparação d
 1. Selecionar uma única foto JPEG/PNG própria ou autorizada, informar o nome de quem aparece nela e conceder as duas autorizações do caso: ambiente (foto, cenário e metadados) e identificação (pesquisa pública da identidade, sem a foto).
 2. Inventariar metadados antes de criar uma derivada orientada, sem metadados embutidos.
 3. Analisar a foto pela Agents API e explorar até três regiões da mesma imagem.
-4. Com rosto presente na foto, a pesquisa começa sozinha após uma contagem regressiva, com os sinais públicos marcados e as buscas da identidade (LinkedIn, redes sociais, Escavador e Jusbrasil); o autor pode pausar para revisar. Sem rosto, a pesquisa aguarda a revisão. Só a pessoa autorizada é pesquisada.
+4. Com exatamente um rosto na foto e o nome informado, a pesquisa começa sozinha após uma contagem regressiva, com os sinais públicos marcados e as buscas da identidade (LinkedIn, redes sociais, Escavador e Jusbrasil); o autor pode pausar para revisar. Com vários rostos ou nenhum, a pesquisa aguarda confirmação. Só a pessoa autorizada é pesquisada.
 5. Enriquecer os achados por web search em sessão separada, sem foto ou inventário privado.
 6. Ler o documento de exposição virtual com evidências, fontes, contradições, limites e recomendações; a seção 5.1 mostra o que a busca descobriu a partir do nome (profissão, organização, atividades), onde a identidade aparece, que dados ficam alcançáveis e a amplitude observada.
 7. Exportar o documento e encerrar o caso, com estado explícito da exclusão das sessões remotas.

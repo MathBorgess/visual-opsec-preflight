@@ -18,7 +18,7 @@ Para mostrar quanto uma foto e uma identidade revelam juntas, todo caso declara 
 | --- | --- |
 | Criação | Autorizações obrigatórias de ambiente e de identificação; nome obrigatório; campos sem e-mail, telefone, documento ou link; validação no navegador e no backend antes de qualquer chamada |
 | Análise visual | Recebe `declaredIdentity` e pode apontar quando texto/objetos da foto coincidem com a identidade; informa `subjects.facesVisible` (contagem de rostos, sem identificar, descrever traços ou atribuir identidade); não pode propor sementes de identidade (`IDENTITY_SEED_FROM_MODEL`) |
-| Revisão | O backend deriva `PID1` (`"nome" profissão`) e `PID2..` (`"nome" atividade`); elas aparecem fixas e entram em toda pesquisa pela autorização de identificação. Com rosto presente, a pesquisa começa sozinha após 5 s com os sinais marcados, salvo se o autor pausar; sem rosto, aguarda a revisão |
+| Revisão | O backend deriva `PID1` (`"nome" profissão`) e `PID2..` (`"nome" atividade`); elas aparecem fixas e entram em toda pesquisa pela autorização de identificação. Com exatamente um rosto e o nome informado, a pesquisa começa sozinha após 5 s com os sinais marcados, salvo se o autor pausar; com mais de um rosto ou nenhum, aguarda confirmação |
 | Pesquisa | Sessão web recebe somente as sementes liberadas, `identityScope` e perguntas de cruzamento escritas pelo backend para os sinais da foto liberados; sem foto, contexto ou inventário |
 | Validação | Fontes de serviços excluídos, ou com número de processo/identificador pessoal no endereço, são descartadas com achados dependentes; fonte de identidade sem classificação conta como possível homônimo |
 | Síntese e dossiê | `identityExposure`, calculado de forma determinística, orienta o resumo e a seção 5.1 |
