@@ -1,0 +1,22 @@
+name: Local checks
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  local:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - run: npx playwright install --with-deps chromium
+      - name: Journey against production build, without OpenAI calls
+        run: OPSEC_E2E_PRODUCTION=1 PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH= npm run test:e2e
+        env:
+          PLAYWRIGHT_USE_BUNDLED_CHROMIUM: 'true'

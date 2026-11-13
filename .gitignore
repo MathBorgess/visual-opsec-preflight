@@ -13,3 +13,11 @@ private/
 *.heic
 *.webp
 .DS_Store
+node_modules/
+.next/
+.vercel/
+coverage/
+playwright-report/
+test-results/
+*.tsbuildinfo
+artifacts/

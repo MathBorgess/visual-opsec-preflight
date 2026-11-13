@@ -1,6 +1,6 @@
 # Requisitos da primeira versão
 
-Especificação proposta em 2026-11-13 para revisão antes de implementar. Premissa: uso privado do autor para análise educativa de uma foto por caso. Modelo, custos, conta e proteção do deployment ainda não foram verificados.
+Especificação de 2026-11-13, autorizada para implementação local. Premissa: uso privado do autor para análise educativa de uma foto por caso. Veja a [matriz de evidências](implementation-status.md). Modelo ao vivo, custos, conta e proteção do deployment ainda não foram verificados.
 
 ## Resultado esperado
 
@@ -50,7 +50,7 @@ Entregar um documento de exposição virtual que responda: “O que esta foto e 
 
 Next.js/TypeScript, handlers Node.js na Vercel, processamento de imagem/metadados, cookie assinada de um caso, integração Agents API, exploração por recortes, web search nativo, validação do documento, revisão/exportação e controles descritos na [arquitetura](architecture.md).
 
-A escolha concreta de bibliotecas/versões será validada na implementação. O contrato do documento e os critérios de aceitação são parte deste desenho, sem código executável.
+Bibliotecas e versões estão fixadas em `package.json`/lockfile. O contrato executável do dossiê está em `src/lib/contracts.ts`; estes critérios continuam orientando a avaliação.
 
 ## Fora da primeira versão
 
@@ -64,4 +64,4 @@ Abertura multiusuário requer nova decisão de escopo: login da aplicação, aut
 
 ## Critério para iniciar implementação
 
-Desenho revisável consistente, requisitos numerados, contrato e exemplo do dossiê, estratégia de Secret e critérios de avaliação disponíveis no PR. A etapa atual termina nesses artefatos; credenciais, acesso real à API e deploy serão tratados na etapa de implementação.
+Desenho, requisitos, contrato, estratégia de Secret e fronteira de testes foram aprovados para implementação local. Credenciais, acesso real à API e deploy foram explicitamente reservados para a etapa final; o [guia de operação](local-operation.md) registra essa configuração.
