@@ -1,7 +1,8 @@
 import OpenAI from 'openai';
 import sharp from 'sharp';
+import { syntheticPhoto } from './synthetic-photo.mjs';
 import { createRequire } from 'node:module';
-import { randomUUID, randomFillSync } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 
 // Explicit build-only probe. No customer input and no exported credential.
 if (process.env.OPSEC_SYNTHETIC_DIAGNOSTIC !== '1')
@@ -100,6 +101,22 @@ if (!Number.isInteger(firstProbe) || firstProbe < 0 || firstProbe > 2)
 if (process.env.OPSEC_PROBE_FULL_CASE === '1') {
   const nativeFetch = globalThis.fetch;
   globalThis.fetch = async (...args) => {
+    if (
+      String(args[0]).startsWith('https://api.openai.com/') &&
+      typeof args[1]?.body === 'string'
+    ) {
+      try {
+        const body = JSON.parse(args[1].body);
+        log({
+          stage: 'static_request_measurements',
+          requestBytes: Buffer.byteLength(args[1].body),
+          inputBytes: Buffer.byteLength(JSON.stringify(body.input ?? null)),
+          schemaBytes: Buffer.byteLength(JSON.stringify(body.agent?.text?.format?.schema ?? null)),
+        });
+      } catch {
+        /* no payload */
+      }
+    }
     const response = await nativeFetch(...args);
     if (String(args[0]).startsWith('https://api.openai.com/') && !response.ok) {
       try {
@@ -110,7 +127,7 @@ if (process.env.OPSEC_PROBE_FULL_CASE === '1') {
           code: body.error?.code,
           param: body.error?.param,
           requestId: response.headers.get('x-request-id'),
-          reason: reason({ status: response.status, message: String(body.error?.message ?? '') }),
+          reason: reason({ status: response.status, message: JSON.stringify(body.error ?? body) }),
         });
       } catch {
         /* no raw body or headers */
@@ -125,11 +142,7 @@ if (process.env.OPSEC_PROBE_FULL_CASE === '1') {
   const require = createRequire(import.meta.url);
   const caseRoute = require('../.next/server/app/api/case/route.js').routeModule.userland;
   try {
-    const bytes = await sharp(randomFillSync(Buffer.alloc(2048 * 2048 * 3)), {
-      raw: { width: 2048, height: 2048, channels: 3 },
-    })
-      .jpeg({ quality: 70 })
-      .toBuffer();
+    const bytes = await syntheticPhoto();
     const form = new FormData();
     form.set('image', new Blob([bytes], { type: 'image/jpeg' }), 'synthetic.jpg');
     form.set('consent', 'yes');
