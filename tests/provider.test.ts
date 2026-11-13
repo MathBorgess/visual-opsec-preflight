@@ -205,6 +205,7 @@ describe('adaptador Agents API — SDK real com HTTP controlado', () => {
               started_at: 10,
               completed_at: 12,
             },
+            { id: 'turn_1', subagent_id: null, status: 'completed' },
           ],
         });
       if (url.pathname.endsWith('/items'))
@@ -217,6 +218,8 @@ describe('adaptador Agents API — SDK real com HTTP controlado', () => {
                   {
                     id: 'tool_1',
                     type: 'web_search_call',
+                    status: 'completed',
+                    turn_id: 'turn_2',
                     action: { type: 'open_page', url: 'https://example.org/event' },
                   },
                   message(
@@ -390,6 +393,62 @@ describe('adaptador Agents API — SDK real com HTTP controlado', () => {
       ).toMatchObject(initial);
     },
   );
+  it('aguarda confirmação do turno antes de validar uma resposta já publicada', async () => {
+    let completed = false;
+    const client = new OpenAI({
+      apiKey: 'test-key-not-a-credential',
+      maxRetries: 0,
+      fetch: async (input) => {
+        const path = new URL(String(input)).pathname;
+        if (path.endsWith('/turns'))
+          return response({
+            data: [
+              {
+                id: 'turn_live',
+                subagent_id: null,
+                status: completed ? 'completed' : 'in_progress',
+              },
+            ],
+            has_more: false,
+          });
+        if (path.endsWith('/items'))
+          return response({
+            data: [
+              {
+                type: 'message',
+                role: 'user',
+                content: [{ type: 'input_text', text: JSON.stringify(initial) }],
+              },
+              {
+                type: 'message',
+                role: 'assistant',
+                phase: 'final_answer',
+                status: 'completed',
+                turn_id: 'turn_live',
+                content: [{ type: 'output_text', text: '{"sources":[]}' }],
+              },
+              {
+                type: 'web_search_call',
+                status: completed ? 'completed' : 'in_progress',
+                turn_id: 'turn_live',
+                action: { type: 'open_page', url: 'https://example.org/event' },
+              },
+            ],
+            has_more: false,
+          });
+        return response({ id: 'as_fixture', status: completed ? 'idle' : 'in_progress' });
+      },
+    });
+    const provider = new OpenAIAgentsProvider(client, 'fixture-model');
+    const pending = await provider.read('as_fixture');
+    expect(pending.outputs).toEqual([]);
+    expect(pending.output).toBeNull();
+    expect(pending.visitedUrls).toEqual([]);
+    completed = true;
+    const ready = await provider.read('as_fixture');
+    expect(ready.output).toMatchObject({ sources: [] });
+    expect(ready.visitedUrls).toEqual(['https://example.org/event']);
+  });
   it('recupera falha persistida do turno com código e IDs, sem a mensagem privada', async () => {
     const client = new OpenAI({
       apiKey: 'test-key-not-a-credential',

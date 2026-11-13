@@ -289,6 +289,7 @@ export class AppError extends Error {
       bounds?: { name: string; actual: number; maximum: number; width?: number; height?: number };
       provider?: ProviderDiagnostic;
       retryable?: boolean;
+      sourceAudit?: { reportedUrl: string; recordedUrls: string[] };
     },
   ) {
     super(message);
@@ -315,6 +316,7 @@ export type Diagnostic = {
   bounds?: NonNullable<AppError['details']>['bounds'];
   provider?: ProviderDiagnostic;
   retryable?: boolean;
+  sourceAudit?: { reportedUrl: string; recordedUrls: string[] };
 };
 export function validBox(box: BoxData) {
   return (

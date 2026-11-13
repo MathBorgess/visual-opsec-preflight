@@ -34,9 +34,11 @@ export function snapshotDiagnostic(error?: AppError): Diagnostic | undefined {
 }
 function logDiagnostic(error?: AppError) {
   const diagnostic = snapshotDiagnostic(error);
-  if (!diagnostic?.provider) return diagnostic;
-  const { summary: _summary, ...provider } = diagnostic.provider;
-  return { ...diagnostic, provider };
+  if (!diagnostic) return diagnostic;
+  const { sourceAudit: _audit, ...safe } = diagnostic;
+  if (!safe.provider) return safe;
+  const { summary: _summary, ...provider } = safe.provider;
+  return { ...safe, provider };
 }
 export function diagnosticEvent(stage: string, measurements?: Record<string, number>) {
   const c = context.getStore();
