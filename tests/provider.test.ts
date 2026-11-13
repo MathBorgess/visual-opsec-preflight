@@ -233,6 +233,54 @@ describe('adaptador Agents API — SDK real com HTTP controlado', () => {
     expect(snapshot.usageTokens).toBe(345);
     expect(paths.some((p) => p.includes('after=answer_1'))).toBe(true);
   });
+  it('lê a resposta final depois do status para não tornar parcial uma síntese recém-concluída', async () => {
+    let completed = false;
+    const message = (role: string, value: unknown) => ({
+      id: role,
+      type: 'message',
+      role,
+      phase: 'final_answer',
+      status: 'completed',
+      turn_id: 'turn_new',
+      content: [
+        { type: role === 'user' ? 'input_text' : 'output_text', text: JSON.stringify(value) },
+      ],
+    });
+    const client = new OpenAI({
+      apiKey: 'test-key-not-a-credential',
+      maxRetries: 0,
+      fetch: async (input) => {
+        const path = new URL(String(input)).pathname;
+        if (path.endsWith('/turns')) {
+          await new Promise((resolve) => setTimeout(resolve, 5));
+          completed = true;
+          return response({
+            data: [{ id: 'turn_new', subagent_id: null, status: 'completed' }],
+            has_more: false,
+          });
+        }
+        if (path.endsWith('/items'))
+          return response({
+            has_more: false,
+            data: [
+              message('user', initial),
+              ...(completed
+                ? [
+                    message('assistant', {
+                      analysis: null,
+                      synthesis: { summary: 'just completed' },
+                    }),
+                  ]
+                : []),
+            ],
+          });
+        return response({ id: 'as_fixture', status: 'idle' });
+      },
+    });
+    const state = await new OpenAIAgentsProvider(client, 'fixture-model').read('as_fixture');
+    expect(state.turnStatus).toBe('completed');
+    expect(state.output).toMatchObject({ summary: 'just completed' });
+  });
   it('recupera falha persistida do turno com código e IDs, sem a mensagem privada', async () => {
     const client = new OpenAI({
       apiKey: 'test-key-not-a-credential',

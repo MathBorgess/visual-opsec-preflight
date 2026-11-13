@@ -153,7 +153,7 @@ export class OpenAIAgentsProvider implements AgentsProvider {
     diagnosticEvent('provider_read');
     providerDiagnostic({ sessionId: safeId(id) });
     try {
-      const [sessionResponse, turns, items] = await Promise.all([
+      const [sessionResponse, turns] = await Promise.all([
         this.client.beta.agents.sessions.retrieve(id, { signal: operationSignal() }).withResponse(),
         this.client.beta.agents.sessions.turns.list(
           id,
@@ -163,24 +163,19 @@ export class OpenAIAgentsProvider implements AgentsProvider {
           },
           { signal: operationSignal() },
         ),
-        (async () => {
-          const collected = [];
-          for await (const item of this.client.beta.agents.sessions.items.list(
-            id,
-            { order: 'asc', limit: 100 },
-            { signal: operationSignal() },
-          )) {
-            collected.push(item);
-            if (collected.length > 500)
-              throw new AppError(
-                'HISTORY_LIMIT',
-                'Histórico excedeu o limite de recuperação.',
-                502,
-              );
-          }
-          return collected;
-        })(),
       ]);
+      // Read outputs after the turn status: an earlier history snapshot can miss
+      // a final answer that completed during the status requests.
+      const items = [];
+      for await (const item of this.client.beta.agents.sessions.items.list(
+        id,
+        { order: 'asc', limit: 100 },
+        { signal: operationSignal() },
+      )) {
+        items.push(item);
+        if (items.length > 500)
+          throw new AppError('HISTORY_LIMIT', 'Histórico excedeu o limite de recuperação.', 502);
+      }
       const session = sessionResponse.data;
       const turn = turns.data.find((t) => t.subagent_id === null);
       providerDiagnostic({
