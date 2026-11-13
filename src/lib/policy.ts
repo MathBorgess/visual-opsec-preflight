@@ -11,24 +11,32 @@ import {
 // Phone numbers with area/country code, or Brazilian mobile numbers. Year
 // ranges such as 2025-2026 deliberately do not match.
 const phone = /(?:\+\d{1,3}[\s.-]?)?\(?\b\d{2}\)?[\s.-]?9?\d{4}[\s.-]\d{4}\b|\b9\d{4}-\d{4}\b/g;
+// CNJ case number, e.g. 0001234-56.2020.8.17.0001.
+const caseNumber = /\b\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}\b/g;
 const address =
   /\b(?:Rua|Avenida|Av\.|Travessa|Alameda|Rodovia|Estrada)\s+[^,;\n]{2,60}?,?\s*(?:n[º°o.]?\s*)?\d{1,5}\b/giu;
 const sensitive =
   /(?:[\w.+-]+@[\w.-]+\.[a-z]{2,}|\b(?:sk-|ghp_|AKIA|Bearer\s)[\w-]{8,}|\b\d{3}\.\d{3}\.\d{3}-\d{2}\b|\b\d{11,}\b|(?:latitude|longitude|password|senha|token|api.?key)\s*[:=]|-?\d{1,3}\.\d{4,}\s*[,;]\s*-?\d{1,3}\.\d{4,})/i;
 export function isSensitive(value: string) {
-  return sensitive.test(value) || new RegExp(phone.source).test(value);
+  return (
+    sensitive.test(value) ||
+    new RegExp(phone.source).test(value) ||
+    new RegExp(caseNumber.source).test(value)
+  );
 }
 export function minimize(value: string) {
   return maskCredentials(value)
     .replace(/[\w.+-]+@[\w.-]+\.[a-z]{2,}/gi, '[e-mail omitido]')
     .replace(/\b\d{3}\.\d{3}\.\d{3}-\d{2}\b|\b\d{11,}\b/g, '[documento omitido]')
     .replace(/-?\d{1,3}\.\d{4,}\s*[,;]\s*-?\d{1,3}\.\d{4,}/g, '[coordenadas omitidas]')
+    .replace(caseNumber, '[nº de processo omitido]')
     .replace(phone, '[telefone omitido]')
     .replace(address, '[endereço omitido]')
     .replace(/\b\d{5}-\d{3}\b/g, '[CEP omitido]');
 }
-// People-search/data brokers, face search engines, leak indexes and legal
-// record aggregators. The research prompt forbids them first; this short,
+// People-search/data brokers, face search engines and leak indexes. Legal
+// record aggregators (Escavador, Jusbrasil) are allowed for the declared
+// identity only. The research prompt forbids these first; this short,
 // non-exhaustive list is a deterministic second barrier on reported sources.
 export const EXCLUDED_SOURCE_HOSTS = [
   'spokeo.com',
@@ -55,8 +63,6 @@ export const EXCLUDED_SOURCE_HOSTS = [
   'facecheck.id',
   'search4faces.com',
   'findclone.ru',
-  'escavador.com',
-  'jusbrasil.com.br',
   'consultasocio.com',
   'tudosobretodos.se',
   'dehashed.com',
@@ -102,6 +108,19 @@ export function publicDomain(host: string): boolean {
     !/(?:^|\.)(localhost|local|internal|test|invalid|example)$/i.test(host) &&
     !/^\d+\./.test(host)
   );
+}
+/** A public HTTPS address whose path carries a personal identifier or case number. */
+export function identifierInUrl(value: string) {
+  try {
+    const u = new URL(value);
+    return (
+      u.protocol === 'https:' &&
+      publicDomain(u.hostname) &&
+      isSensitive(decodeURIComponent(u.pathname + u.search + u.hash))
+    );
+  } catch {
+    return false;
+  }
 }
 export function safeUrl(value: string, fixture = false): string | null {
   try {
@@ -154,7 +173,7 @@ export function approveSeeds(
   return seeds as AnalysisData['seeds'];
 }
 const identityLimits =
-  'Registre em exposure a categoria da fonte e as classes de dados visíveis, sem copiar contato, endereço, documento ou agenda no trecho. Indique homônimos. Não use buscadores de pessoas, agregadores de processos ou vazamentos; não colete endereço residencial, telefone pessoal, documentos, familiares, relacionamentos, rotina, localização atual nem atributos sensíveis; não pivote para outras pessoas.';
+  'Inclua LinkedIn, Lattes, GitHub e perfis públicos em redes sociais; Escavador e Jusbrasil valem só para registrar que o nome aparece em processo ou diário oficial, sem número, partes, valores ou natureza do caso. Registre em exposure a categoria da fonte e as classes de dados visíveis, sem copiar contato, endereço, documento ou agenda no trecho. Indique homônimos. Não use buscadores de pessoas, busca facial ou vazamentos; não colete endereço residencial, telefone pessoal, documentos, rotina, localização atual nem atributos sensíveis. Somente a pessoa autorizada: familiares, colegas, coautores, partes de processos e outras pessoas da foto ficam fora, sem nomes.';
 export const crossIdentityPurpose =
   'Com identidade autorizada: verificar se fontes públicas deste sinal da foto mencionam a identidade declarada (programação, equipe, autoria), mostrando como foto e identidade se reforçam. Uma menção não comprova presença, vínculo atual, localização ou rotina.';
 export function publicResearchPurpose(
@@ -191,13 +210,28 @@ export function validateResearch(
   const known = new Set(analysis.evidence.map((e) => e.id));
   const sourceIds = new Set<string>();
   const excluded = new Set(result.sources.filter((s) => excludedSource(s.url)).map((s) => s.id));
-  if (excluded.size) {
-    result.sources = result.sources.filter((s) => !excluded.has(s.id));
-    result.findings = result.findings.filter((f) => !f.evidenceIds.some((id) => excluded.has(id)));
-    result.limitations = [
-      ...result.limitations.slice(0, 11),
-      `${excluded.size} fonte(s) de buscador de pessoas, agregador de dados ou vazamento descartada(s) com os achados dependentes; esses serviços ficam fora da coleta automática.`,
-    ];
+  // A case number or personal identifier in the address would leak into the
+  // dossier; the source is dropped instead of rejecting the whole round.
+  const identifying = new Set(
+    result.sources.filter((s) => !excluded.has(s.id) && identifierInUrl(s.url)).map((s) => s.id),
+  );
+  const notes = [
+    ...(excluded.size
+      ? [
+          `${excluded.size} fonte(s) de buscador de pessoas, busca facial ou vazamento descartada(s) com os achados dependentes; esses serviços ficam fora da coleta automática.`,
+        ]
+      : []),
+    ...(identifying.size
+      ? [
+          `${identifying.size} fonte(s) com número de processo ou identificador pessoal no endereço descartada(s) com os achados dependentes.`,
+        ]
+      : []),
+  ];
+  if (notes.length) {
+    const dropped = new Set([...excluded, ...identifying]);
+    result.sources = result.sources.filter((s) => !dropped.has(s.id));
+    result.findings = result.findings.filter((f) => !f.evidenceIds.some((id) => dropped.has(id)));
+    result.limitations = [...result.limitations.slice(0, 12 - notes.length), ...notes];
   }
   const seedOf = (id: string) => analysis.seeds.find((seed) => seed.id === id);
   const identityApproved = approvedIds.some((id) => {

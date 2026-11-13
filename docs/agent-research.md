@@ -17,10 +17,10 @@ Para mostrar quanto uma foto e uma identidade revelam juntas, todo caso declara 
 | Passo | Controle |
 | --- | --- |
 | Criação | Autorizações obrigatórias de ambiente e de identificação; nome obrigatório; campos sem e-mail, telefone, documento ou link; validação no navegador e no backend antes de qualquer chamada |
-| Análise visual | Recebe `declaredIdentity` e pode apontar quando texto/objetos da foto coincidem com a identidade; não pode propor sementes de identidade (`IDENTITY_SEED_FROM_MODEL`) |
-| Revisão | O backend deriva `PID1` (`"nome" profissão`) e `PID2..` (`"nome" atividade`); elas aparecem fixas e entram em toda pesquisa pela autorização de identificação, enquanto o autor escolhe os sinais da foto |
+| Análise visual | Recebe `declaredIdentity` e pode apontar quando texto/objetos da foto coincidem com a identidade; informa `subjects.facesVisible` (contagem de rostos, sem identificar, descrever traços ou atribuir identidade); não pode propor sementes de identidade (`IDENTITY_SEED_FROM_MODEL`) |
+| Revisão | O backend deriva `PID1` (`"nome" profissão`) e `PID2..` (`"nome" atividade`); elas aparecem fixas e entram em toda pesquisa pela autorização de identificação. Com rosto presente, a pesquisa começa sozinha após 5 s com os sinais marcados, salvo se o autor pausar; sem rosto, aguarda a revisão |
 | Pesquisa | Sessão web recebe somente as sementes liberadas, `identityScope` e perguntas de cruzamento escritas pelo backend para os sinais da foto liberados; sem foto, contexto ou inventário |
-| Validação | Fontes de agregadores excluídos são descartadas com achados dependentes; fonte de identidade sem classificação conta como possível homônimo |
+| Validação | Fontes de serviços excluídos, ou com número de processo/identificador pessoal no endereço, são descartadas com achados dependentes; fonte de identidade sem classificação conta como possível homônimo |
 | Síntese e dossiê | `identityExposure`, calculado de forma determinística, orienta o resumo e a seção 5.1 |
 
 A cadeia de uma corroboração sobre a identidade é `achado → fonte web → semente PID → evidência UID`. Uma menção em programação de evento ou página institucional mostra como foto e identidade se reforçam; não comprova presença, vínculo atual, localização ou rotina.

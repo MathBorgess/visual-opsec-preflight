@@ -977,8 +977,10 @@ function researchData(
         'Mostrar, para fins educativos, quanto da identidade autorizada está exposto em fontes públicas e como ela se combina aos sinais aprovados da foto.',
       exposureCategories: EXPOSURE_CATEGORIES,
       exposedData: EXPOSED_DATA,
+      permittedSources:
+        'LinkedIn, Lattes, GitHub, perfis públicos em redes sociais, páginas institucionais, publicações, eventos, imprensa, e Escavador/Jusbrasil apenas para registrar menções ao nome declarado.',
       outOfScope:
-        'Outras pessoas, homônimos como alvo, buscadores de pessoas, agregadores de processos, vazamentos, endereço residencial, telefone pessoal, documentos, familiares, rotina, localização atual e atributos sensíveis.',
+        'Outras pessoas (familiares, colegas, coautores, partes de processos, demais pessoas da foto), homônimos como alvo, outros buscadores de pessoas, busca facial, vazamentos, número de processo, endereço residencial, telefone pessoal, documentos, rotina, localização atual e atributos sensíveis.',
     },
   };
 }

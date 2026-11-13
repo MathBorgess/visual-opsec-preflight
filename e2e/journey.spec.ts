@@ -37,6 +37,9 @@ test('jornada local: fixture → exploração → sementes → pesquisa → revi
   await expect(
     page.getByRole('heading', { name: 'Quais sinais podem ser pesquisados?' }),
   ).toBeVisible({ timeout: 30000 });
+  // Holding the autonomous search keeps the manual review path available.
+  await page.getByRole('button', { name: 'Revisar antes de pesquisar' }).click();
+  await expect(page.getByText('Busca autônoma pausada.')).toBeVisible();
   const seed = page.getByRole('checkbox', { name: /Encontro Aurora/ });
   await seed.check();
   await page.getByRole('button', { name: 'Autorizar sinais e pesquisar' }).click();

@@ -20,6 +20,7 @@ import {
   relationLabels,
 } from '@/lib/identity';
 
+const AUTONOMOUS_SEARCH_SECONDS = 5;
 const phaseNames: Record<string, string> = {
   analyzing: 'Analisando a imagem',
   exploring: 'Explorando uma pista',
@@ -175,6 +176,10 @@ export function Workspace() {
     [domains, setDomains] = useState(''),
     [auto, setAuto] = useState(true),
     [manual, setManual] = useState('0.1, 0.1, 0.6, 0.3');
+  // With a face present and both authorizations granted, the search starts on
+  // its own after a short countdown; the author can hold it to review first.
+  const [holdSearch, setHoldSearch] = useState(false),
+    [countdown, setCountdown] = useState(0);
   const [reviewed, setReviewed] = useState<Report | null>(null),
     [closed, setClosed] = useState(false);
   const [recovery, setRecovery] = useState(false);
@@ -209,6 +214,7 @@ export function Workspace() {
     if (v.diagnostic) setDiagnostic(v.diagnostic);
     if (v.caseId !== selectedCase.current) {
       selectedCase.current = v.caseId;
+      setHoldSearch(false);
       setSeeds(v.analysis.seeds.filter((s) => !isIdentitySeed(s)).map((s) => s.id));
     } else {
       const available = new Set(
@@ -379,6 +385,44 @@ export function Workspace() {
     );
     return () => clearTimeout(timer);
   }, [auto, view, closed, busy, act, advance]);
+  const facesVisible = view?.analysis.subjects?.facesVisible ?? 0;
+  const autonomousSearch =
+    !!view &&
+    auto &&
+    !holdSearch &&
+    !closed &&
+    view.phase === 'awaiting_search_review' &&
+    !!view.identity &&
+    facesVisible > 0;
+  const search = useCallback(
+    () =>
+      advance('search', {
+        seedIds: seeds,
+        domains: domains
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean),
+      }),
+    [advance, seeds, domains],
+  );
+  useEffect(() => {
+    if (!autonomousSearch || busy) {
+      setCountdown(0);
+      return;
+    }
+    // Editing the selection or domains restarts the countdown.
+    let left = AUTONOMOUS_SEARCH_SECONDS;
+    setCountdown(left);
+    const timer = setInterval(() => {
+      left -= 1;
+      setCountdown(left);
+      if (left <= 0) {
+        clearInterval(timer);
+        void act(search);
+      }
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [autonomousSearch, busy, act, search]);
   async function start() {
     if (!file) throw new Error('Selecione uma foto.');
     const requestId = crypto.randomUUID();
@@ -725,7 +769,8 @@ export function Workspace() {
                   <span>
                     <strong>Ambiente.</strong> Esta foto é própria ou autorizada. Autorizo analisar
                     a imagem, o ambiente e os metadados do arquivo, com envio de uma derivada à
-                    OpenAI, conforme o processamento descrito ao lado.
+                    OpenAI, e pesquisar sinais públicos do ambiente (eventos, organizações, locais,
+                    produtos) sem enviar a foto, conforme o processamento descrito ao lado.
                   </span>
                 </label>
                 <label className="check">
@@ -737,8 +782,10 @@ export function Workspace() {
                   <span>
                     <strong>Identificação.</strong> A identidade informada é minha ou de quem
                     autorizou expressamente esta pesquisa educativa. Autorizo pesquisar nome,
-                    profissão e atividades em fontes públicas, sem enviar a foto, e cruzá-los com os
-                    sinais públicos da imagem.
+                    profissão e atividades em fontes públicas (LinkedIn, redes sociais, Escavador e
+                    Jusbrasil), sem enviar a foto, e cruzá-los com os sinais públicos da imagem. Com
+                    rosto presente, a busca segue de forma autônoma e cobre só esta pessoa, nunca
+                    familiares ou colegas.
                   </span>
                 </label>
               </fieldset>
@@ -793,15 +840,16 @@ export function Workspace() {
                 <li>
                   <strong>Pesquisa pública separada</strong>
                   <p>
-                    Recebe somente os sinais revisados. A foto e o inventário privado não acompanham
-                    a busca.
+                    Recebe somente os sinais selecionados, automaticamente quando há rosto na foto.
+                    A foto e o inventário privado não acompanham a busca.
                   </p>
                 </li>
                 <li>
                   <strong>Identidade declarada</strong>
                   <p>
-                    Nome, profissão e atividades viram buscas públicas, sem a foto, para medir a
-                    exposição. Buscadores de pessoas, processos e vazamentos ficam fora.
+                    Nome, profissão e atividades viram buscas em LinkedIn, redes sociais, Escavador
+                    e Jusbrasil, sem a foto. Só a pessoa autorizada; buscadores de pessoas, busca
+                    facial e vazamentos ficam fora.
                   </p>
                 </li>
               </ol>
@@ -898,6 +946,12 @@ export function Workspace() {
                     ? `: ${view.research.sources.filter((s) => s.exposure?.match === 'declared_identity').length} fonte(s) atribuída(s) até agora.`
                     : '.'}
                 </p>
+                {view.analysis.subjects && (
+                  <p className="muted">
+                    Rostos visíveis: {view.analysis.subjects.facesVisible}. Só a pessoa autorizada é
+                    pesquisada; outras pessoas da foto, familiares e colegas ficam fora.
+                  </p>
+                )}
               </section>
             )}
             <div className="analysis-grid">
@@ -1055,6 +1109,23 @@ export function Workspace() {
                   Selecione apenas termos públicos. Sua decisão vale para até duas rodadas dentro
                   deste escopo; sem confirmação repetida por reformulação.
                 </p>
+                {autonomousSearch && countdown > 0 && (
+                  <div className="notice autonomous" role="status" aria-live="polite">
+                    Rosto presente e autorizações concedidas: a pesquisa começa automaticamente em{' '}
+                    {countdown}s com os sinais marcados e a identidade autorizada.{' '}
+                    <button className="text-button" onClick={() => setHoldSearch(true)}>
+                      Revisar antes de pesquisar
+                    </button>
+                  </div>
+                )}
+                {view.identity && holdSearch && (
+                  <p className="muted">Busca autônoma pausada. Revise e pesquise quando quiser.</p>
+                )}
+                {view.identity && view.analysis.subjects && facesVisible === 0 && (
+                  <p className="muted">
+                    Nenhum rosto visível na foto: a pesquisa aguarda a sua revisão.
+                  </p>
+                )}
                 {view.identity && <h3 className="seed-group">Sinais públicos da foto</h3>}
                 {view.identity && !view.analysis.seeds.some((s) => !isIdentitySeed(s)) && (
                   <p className="muted">A análise não propôs sinais públicos da foto.</p>
@@ -1087,8 +1158,10 @@ export function Workspace() {
                       Incluídas pela autorização de identificação dada ao abrir o caso. Partem do
                       nome declarado, combinado à profissão e às atividades, e cruzam a identidade
                       com os sinais da foto selecionados acima: mostram o que um desconhecido
-                      encontraria com a foto e o nome. Ficam fora: buscadores de pessoas, processos,
-                      vazamentos, endereço, telefone pessoal, familiares e rotina.
+                      encontraria com a foto e o nome. Incluem LinkedIn, redes sociais, Escavador e
+                      Jusbrasil. Somente esta pessoa: familiares, colegas e outras pessoas da foto
+                      ficam fora, assim como buscadores de pessoas, busca facial, vazamentos, número
+                      de processo, endereço, telefone pessoal e rotina.
                     </p>
                     <ul className="seed-list" aria-label="Buscas da identidade autorizada">
                       {view.analysis.seeds.filter(isIdentitySeed).map((s) => (
@@ -1113,21 +1186,7 @@ export function Workspace() {
                     onChange={(e) => setDomains(e.target.value)}
                   />
                 </label>
-                <button
-                  className="primary"
-                  disabled={busy}
-                  onClick={() =>
-                    act(() =>
-                      advance('search', {
-                        seedIds: seeds,
-                        domains: domains
-                          .split(',')
-                          .map((s) => s.trim())
-                          .filter(Boolean),
-                      }),
-                    )
-                  }
-                >
+                <button className="primary" disabled={busy} onClick={() => act(search)}>
                   {seeds.length || view.identity
                     ? 'Autorizar sinais e pesquisar →'
                     : 'Gerar dossiê sem pesquisa →'}
@@ -1259,6 +1318,12 @@ function ReportPanel({ report, onChange }: { report: Report; onChange: (r: Repor
         Caso {report.caseId.slice(0, 8)} · {new Date(report.generatedAt).toLocaleString('pt-BR')} ·{' '}
         {report.mode === 'demo' ? 'SIMULAÇÃO SEM IA/BUSCA REAL' : 'Agents API'}
       </p>
+      {report.scope.facesVisible !== null && (
+        <p className="muted">
+          Rostos visíveis: {report.scope.facesVisible}. Somente a pessoa autorizada é pesquisada;
+          nenhum rosto é usado para identificar.
+        </p>
+      )}
       <h3>2. Resumo de exposição</h3>
       <p>{report.summary}</p>
       {report.scope.identity && report.identity.state === 'executed' && (
@@ -1428,8 +1493,8 @@ function ReportPanel({ report, onChange }: { report: Report; onChange: (r: Repor
             </a>
           </li>
           <li>
-            Buscadores de pessoas e agregadores de dados: procure seu nome manualmente e use o canal
-            de remoção de cada serviço. A aplicação não os consulta.
+            Escavador, Jusbrasil e outros agregadores: confira os canais de remoção ou desindexação
+            de cada serviço. Buscadores de pessoas além desses não são consultados pela aplicação.
           </li>
         </ul>
       </details>

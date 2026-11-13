@@ -175,6 +175,41 @@ describe('identidade declarada com autorização', () => {
     );
     expect(photoOnly.sources[0].exposure).toBeNull();
   });
+  it('aceita Escavador e Jusbrasil e descarta endereço com número de processo', () => {
+    const research: ResearchData = {
+      sources: [
+        source('W1', 'PID1', {
+          url: 'https://www.escavador.com/sobre/123456/ana-exemplo',
+          exposure: {
+            category: 'public_record',
+            dataClasses: ['full_name', 'legal_mention'],
+            match: 'declared_identity',
+          },
+        }),
+        source('W2', 'PID1', { url: 'https://www.jusbrasil.com.br/nome/ana-exemplo' }),
+        source('W3', 'PID1', {
+          url: 'https://www.jusbrasil.com.br/processos/0001234-56.2020.8.17.0001',
+        }),
+        source('W4', 'PID1', {
+          url: 'https://www.escavador.com/processos/00012345620208170001',
+        }),
+      ],
+      findings: [
+        { ...base.findings[0], id: 'FW3', status: 'corroborated', evidenceIds: ['UID1', 'W3'] },
+      ],
+      limitations: [],
+      followup: null,
+    };
+    const urls = research.sources.map((s) => s.url);
+    const clean = validateResearch(research, analysis, ['PID1'], [], 'openai', urls);
+    expect(clean.sources.map((s) => s.id)).toEqual(['W1', 'W2']);
+    expect(clean.findings).toHaveLength(0);
+    expect(clean.limitations.at(-1)).toContain('número de processo');
+    expect(clean.sources[0].exposure?.category).toBe('public_record');
+    expect(minimize('Processo 0001234-56.2020.8.17.0001 citado.')).toBe(
+      'Processo [nº de processo omitido] citado.',
+    );
+  });
   it('mede amplitude com critério declarado e deixa homônimos fora da contagem', () => {
     const seeds = analysis.seeds;
     const exposure = (sources: SourceData[], id: DeclaredIdentityData | null = identity) =>
@@ -222,6 +257,15 @@ describe('identidade declarada com autorização', () => {
     expect(all.categories.map((c) => c.category)).not.toContain('media_mention');
     expect(all.dataClasses.find((d) => d.dataClass === 'contact')?.sourceIds).toEqual(['W3']);
     expect(all.breadthReason).toContain('Critério declarado');
+    const record = source('W5', 'PID1', {
+      exposure: {
+        category: 'public_record',
+        dataClasses: ['legal_mention'],
+        match: 'declared_identity',
+      },
+    });
+    // 2 categories + legal mention (2) + schedule + city = 6 points.
+    expect(exposure([profile, event, record]).breadth).toBe('high');
     expect(all.limitations.join(' ')).toContain('não é probabilidade de dano');
   });
   it('minimiza telefones, endereços e CEP sem confundir intervalos de anos', () => {

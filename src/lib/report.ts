@@ -63,6 +63,12 @@ export function buildReport(
     ['open', 'inconclusive', 'not_explored'].includes(q.status),
   );
   const identity = initial.declaredIdentity ?? null;
+  const facesVisible = analysis.subjects?.facesVisible ?? null;
+  const exposure = identityExposure(identity, analysis.seeds, research, m.allowedSeedIds, m.rounds);
+  if (identity && facesVisible !== null && facesVisible > 1)
+    exposure.limitations.push(
+      `${facesVisible - 1} outra(s) pessoa(s) visível(is) na foto ficou(aram) fora da pesquisa por não ter(em) autorizado; considere desfocá-la(s) antes de compartilhar.`,
+    );
   const report: Report = {
     version: 'exposure-report/1.1',
     caseId: m.caseId,
@@ -86,6 +92,7 @@ export function buildReport(
         format: initial.image.format,
       },
       identity,
+      facesVisible,
     },
     summary:
       synthesis?.summary ??
@@ -103,7 +110,7 @@ export function buildReport(
       seeds: analysis.seeds.filter((s) => m.allowedSeedIds.includes(s.id)),
       sources,
     },
-    identity: identityExposure(identity, analysis.seeds, research, m.allowedSeedIds, m.rounds),
+    identity: exposure,
     findings: findings.map((f) =>
       f.evidenceIds.some((id) =>
         analysis.evidence.some((e) => e.id === id && e.sensitivity === 'private'),
@@ -195,6 +202,9 @@ export function reportMarkdown(r: Report): string {
     'Estado: ' + r.status,
     'Gerado em: ' + r.generatedAt,
     clean(r.scope.objective),
+    'Rostos visíveis: ' +
+      (r.scope.facesVisible ?? 'não informado') +
+      '. Somente a pessoa autorizada é pesquisada; nenhum rosto é usado para identificar.',
     '## 2. Resumo de exposição',
     clean(r.summary),
     '## 3. O que a foto mostra',

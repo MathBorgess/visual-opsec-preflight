@@ -1104,6 +1104,12 @@ describe('trilha de identidade autorizada', () => {
     expect(payload).toContain('\\"Ana Exemplo\\" corrida de rua');
     for (const hidden of ['PRIVATE_CONTEXT', 'owner@example', 'GPS', 'PRIVATE_AUTHOR'])
       expect(payload).not.toContain(hidden);
+    expect(String((search.data.identityScope as Record<string, unknown>).permittedSources)).toMatch(
+      /Escavador\/Jusbrasil/,
+    );
+    expect(String((search.data.identityScope as Record<string, unknown>).outOfScope)).toContain(
+      'familiares, colegas',
+    );
     expect(search.data.identityScope).toMatchObject({
       relation: 'self',
       declaredSeedIds: ['PID1', 'PID2', 'PID3'],
@@ -1125,18 +1131,25 @@ describe('trilha de identidade autorizada', () => {
     expect(report.scope.identity.name).toBe('Ana Exemplo');
     expect(report.identity).toMatchObject({
       state: 'executed',
-      attributedSources: ['W2', 'W3'],
+      attributedSources: ['W2', 'W3', 'W5'],
       homonymSources: ['W4'],
-      // 2 categories + photo + city + schedule = 5 points.
-      breadth: 'moderate',
+      // 3 categories + legal mention (2) + photo + city + schedule = 8 points.
+      breadth: 'high',
     });
+    expect(report.scope.facesVisible).toBe(1);
+    expect(
+      report.identity.categories.find((c: { category: string }) => c.category === 'public_record')
+        .sourceIds,
+    ).toEqual(['W5']);
     expect(report.findings.map((f: { id: string }) => f.id)).toEqual(
       expect.arrayContaining(['FW2', 'FW3']),
     );
     const markdown = reportMarkdown(report);
     expect(markdown.match(/^## [1-8]\./gm)).toHaveLength(8);
     expect(markdown).toContain('### 5.1 Exposição da identidade autorizada');
-    expect(markdown).toContain('Amplitude observada: Moderada');
+    expect(markdown).toContain('Amplitude observada: Alta');
+    expect(markdown).toContain('Rostos visíveis: 1');
+    expect(markdown).toContain('Processo ou diário oficial: W5');
     expect(markdown).toContain('possível homônimo');
   });
   it('a autorização de identificação não aceita sementes de identidade inventadas', async () => {
@@ -1199,6 +1212,31 @@ describe('trilha de identidade autorizada', () => {
     expect(view.error).toBeNull();
     expect(view.analysis.seeds.map((seed) => seed.id)).toEqual(['S1', 'PID1', 'PID2', 'PID3']);
   });
+  it('outras pessoas visíveis ficam fora da pesquisa e o dossiê registra isso', async () => {
+    class Group extends DemoProvider {
+      async read(id: string) {
+        const s = await super.read(id);
+        for (const o of s.outputs) {
+          const parsed = Analysis.safeParse(o);
+          if (parsed.success)
+            (o as { subjects: unknown }).subjects = {
+              facesVisible: 3,
+              note: 'Um rosto em primeiro plano e dois ao fundo.',
+            };
+        }
+        return s;
+      }
+    }
+    const { h } = await identityReview(harness(new Group()));
+    await h.call('advance', { action: 'search', seedIds: ['S1'] });
+    const search = JSON.stringify(h.provider.calls.find((c) => c.stage === 'research'));
+    expect(search).not.toContain('dois ao fundo');
+    await h.call('get');
+    await h.call('advance', { action: 'synthesize' });
+    const report = (await h.call('get')).data.report;
+    expect(report.scope.facesVisible).toBe(3);
+    expect(report.identity.limitations.join(' ')).toContain('2 outra(s) pessoa(s) visível(is)');
+  });
   it('fonte de buscador de pessoas é descartada com os achados dependentes', async () => {
     class Broker extends DemoProvider {
       async read(id: string) {
@@ -1213,7 +1251,11 @@ describe('trilha de identidade autorizada', () => {
     const { h } = await identityReview(harness(new Broker()));
     await h.call('advance', { action: 'search', seedIds: ['PID1', 'PID2'] });
     const ready = await h.call('get');
-    expect(ready.data.research.sources.map((s: { id: string }) => s.id)).toEqual(['W3', 'W4']);
+    expect(ready.data.research.sources.map((s: { id: string }) => s.id)).toEqual([
+      'W3',
+      'W4',
+      'W5',
+    ]);
     expect(ready.data.research.findings.map((f: { id: string }) => f.id)).not.toContain('FW2');
     expect(ready.data.research.limitations.join(' ')).toContain('buscador de pessoas');
   });

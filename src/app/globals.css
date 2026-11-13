@@ -774,6 +774,9 @@ input[type='radio'] {
 .seed-list strong {
   font-size: 13px;
 }
+.notice.autonomous {
+  border-left: 4px solid var(--deep);
+}
 .identity-card {
   margin-bottom: 25px;
   border-left: 4px solid var(--deep);

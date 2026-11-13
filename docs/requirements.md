@@ -17,6 +17,7 @@ Entregar um documento de exposição virtual que responda: “O que esta foto e 
 | RF-05 | Analisar com Agents API | Produz observações e limitações ancoradas na foto/contexto; leitura visual não é apresentada como OCR validado |
 | RF-06 | Explorar regiões da mesma foto | Até três recortes válidos, solicitados pelo agente e vinculados ao original; usuário também pode apontar uma região dentro do limite |
 | RF-07 | Revisar sementes públicas | Autor pode aprovar/excluir sinais da foto e domínios antes da rodada web; as buscas da identidade aparecem fixas, cobertas pela autorização de identificação; decisão aparece no escopo do dossiê |
+| RF-25 | Buscar de forma autônoma com rosto presente | A análise informa quantos rostos estão visíveis (contagem, nunca identificação). Com rosto presente, identidade declarada e as duas autorizações, a pesquisa começa sozinha após contagem regressiva de 5 s com os sinais marcados; "Revisar antes de pesquisar" pausa e devolve a decisão ao autor. Sem rosto, a pesquisa aguarda revisão. Outras pessoas visíveis ficam fora do escopo e o dossiê registra isso |
 | RF-08 | Enriquecer com web search nativo | Até duas rodadas na sessão separada; somente dados autorizados, fontes e estados reais; sem buscar se nenhum termo for liberado |
 | RF-09 | Manter proveniência | Cada achado aponta a evidências existentes; inferência externa liga sinal inicial, semente, rodada e fonte |
 | RF-10 | Produzir o dossiê | Todas as seções do contrato aparecem, inclusive vazias com motivo; distingue observação, corroboração, hipótese, conflito e desconhecido |
@@ -50,7 +51,7 @@ Entregar um documento de exposição virtual que responda: “O que esta foto e 
 | RNF-09 | Ser utilizável | Upload, progresso, evidência e exportação por teclado, labels claros e texto de estado acessível |
 | RNF-10 | Manter alegações honestas | Nenhuma promessa de exaustividade, identidade, residência, segurança certificada ou precisão não medida |
 | RNF-11 | Distinguir garantias e instruções | Testes comprovam controles externos ao modelo; prompt e auditoria posterior não são anunciados como bloqueio de cada consulta interna |
-| RNF-12 | Limitar a trilha de identidade | Sem reconhecimento facial nem busca reversa; buscadores de pessoas, agregadores de processos e bases de vazamentos são proibidos no prompt e descartados por lista determinística curta; telefones, endereços e CEP são mascarados nas apresentações; familiares, colegas e homônimos não viram alvos |
+| RNF-12 | Limitar a trilha de identidade | Sem reconhecimento facial nem busca reversa; o rosto só é contado. LinkedIn, redes sociais públicas, Escavador e Jusbrasil são permitidos apenas para a identidade declarada; nos agregadores jurídicos registra-se só a menção ao nome, sem número de processo, partes ou natureza do caso. Outros buscadores de pessoas, busca facial e bases de vazamentos são proibidos no prompt e descartados por lista determinística curta; fontes com número de processo ou identificador pessoal no endereço são descartadas; telefones, endereços, CEP e números de processo são mascarados; familiares, colegas, coautores, partes e homônimos não viram alvos |
 
 ## Escopo que será implementado
 

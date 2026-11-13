@@ -89,6 +89,9 @@ export const EXPOSURE_CATEGORIES = [
   'media_mention',
   'social_profile',
   'code_or_portfolio',
+  // Legal proceedings and official gazettes indexed by aggregators such as
+  // Escavador and Jusbrasil; only the presence of the name is recorded.
+  'public_record',
   'other',
 ] as const;
 // Classes of data visible in a source. Values are never copied: contact,
@@ -105,6 +108,7 @@ export const EXPOSED_DATA = [
   'schedule',
   'biography',
   'affiliations',
+  'legal_mention',
 ] as const;
 export const SourceExposure = z
   .object({
@@ -149,8 +153,17 @@ export const Finding = z
     correction: text,
   })
   .strict();
+// Count of visible human faces, never an identification. The declared identity
+// refers only to the person who authorized it; anyone else stays out of scope.
+export const Subjects = z
+  .object({
+    facesVisible: z.number().int().min(0).max(50),
+    note: text,
+  })
+  .strict();
 export const Analysis = z
   .object({
+    subjects: Subjects.nullable().optional(),
     evidence: z.array(Evidence).max(30),
     questions: z.array(Question).max(5),
     seeds: z.array(Seed).max(12),
@@ -311,6 +324,7 @@ export type Report = {
     selectedSeeds: string[];
     image: { width: number; height: number; format: string };
     identity: DeclaredIdentityData | null;
+    facesVisible: number | null;
   };
   summary: string;
   visual: AnalysisData['evidence'];

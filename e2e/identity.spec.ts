@@ -43,8 +43,12 @@ test('fluxo principal com identidade: foto + nome + autorizações → exposiç�
   );
   await expect(page.getByRole('checkbox', { name: /"Ana Exemplo"/ })).toHaveCount(0);
   await expect(page.getByRole('checkbox', { name: /Encontro Aurora/ })).toBeChecked();
+  await expect(page.getByText('Rostos visíveis: 1.', { exact: false }).first()).toBeVisible();
+  // A face is present and both authorizations were granted: the search starts on its own.
+  await expect(
+    page.getByRole('status').filter({ hasText: 'começa automaticamente' }),
+  ).toBeVisible();
   await page.screenshot({ path: 'artifacts/identity-review-desktop.png', fullPage: true });
-  await page.getByRole('button', { name: 'Autorizar sinais e pesquisar' }).click();
   await expect(page.getByRole('heading', { name: 'Seu dossiê, com limites claros.' })).toBeVisible({
     timeout: 30000,
   });
@@ -52,7 +56,10 @@ test('fluxo principal com identidade: foto + nome + autorizações → exposiç�
   await expect(
     dossier.getByRole('heading', { name: '5.1 Exposição da identidade autorizada' }),
   ).toBeVisible();
-  await expect(dossier.locator('.breadth')).toContainText('Moderada');
+  await expect(dossier.locator('.breadth')).toContainText('Alta');
+  await expect(dossier.getByRole('list', { name: 'Categorias de exposição' })).toContainText(
+    'Processo ou diário oficial',
+  );
   await expect(dossier.locator('.identity-callout')).toContainText(
     'Partindo da foto e da identidade autorizada de Ana Exemplo',
   );

@@ -33,6 +33,7 @@ export const categoryLabels: Record<ExposureCategory, string> = {
   media_mention: 'Menção na imprensa',
   social_profile: 'Perfil em rede social',
   code_or_portfolio: 'Código ou portfólio',
+  public_record: 'Processo ou diário oficial',
   other: 'Outra',
 };
 export const dataClassLabels: Record<ExposedDataClass, string> = {
@@ -47,6 +48,7 @@ export const dataClassLabels: Record<ExposedDataClass, string> = {
   schedule: 'Agenda/horário',
   biography: 'Minibiografia',
   affiliations: 'Vínculos e grupos',
+  legal_mention: 'Menção em processo ou diário oficial',
 };
 export const breadthLabels: Record<IdentityExposure['breadth'], string> = {
   not_assessed: 'Não avaliada',
@@ -59,6 +61,7 @@ export const breadthLabels: Record<IdentityExposure['breadth'], string> = {
 // the person. Weights are a declared curation rule, not a calibrated risk.
 const weightedClasses: Partial<Record<ExposedDataClass, number>> = {
   contact: 2,
+  legal_mention: 2,
   city: 1,
   schedule: 1,
   photo: 1,
@@ -325,7 +328,7 @@ export function identityExposure(
             .map((c) => categoryLabels[c.category])
             .join(', ')}); classes de maior poder de associação: ${
             heavy.map((d) => dataClassLabels[d.dataClass]).join(', ') || 'nenhuma'
-          }. Critério declarado: categorias distintas + contato (2) + cidade, agenda e foto (1 cada); até 2 baixa, 3 a 5 moderada, 6 ou mais alta.`;
+          }. Critério declarado: categorias distintas + contato e menção em processo ou diário oficial (2 cada) + cidade, agenda e foto (1 cada); até 2 baixa, 3 a 5 moderada, 6 ou mais alta.`;
   return {
     state,
     seeds: approved.map((s) => s.text),
@@ -342,7 +345,8 @@ export function identityExposure(
           ...(homonyms.length
             ? [`${homonyms.length} fonte(s) com possível homônimo ficaram fora da contagem.`]
             : []),
-          'Buscadores de pessoas, agregadores de processos e bases de vazamentos não são consultados automaticamente.',
+          'Somente a pessoa autorizada é pesquisada: familiares, colegas, coautores, partes de processos e outras pessoas da foto ficam fora.',
+          'Buscadores de pessoas, busca facial e bases de vazamentos não são consultados; Escavador e Jusbrasil entram apenas para registrar menções ao nome declarado.',
         ]
       : [],
   };

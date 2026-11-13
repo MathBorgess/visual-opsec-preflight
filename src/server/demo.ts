@@ -29,6 +29,10 @@ export function demoAnalysis(initial: InitialContext, refined = false): Analysis
     correction: '',
   };
   return {
+    subjects: {
+      facesVisible: 1,
+      note: 'Simulação: um rosto em primeiro plano; contagem fictícia, sem identificação.',
+    },
     evidence: [
       {
         id: 'V1',
@@ -152,6 +156,20 @@ function demoIdentityResearch(seeds: AnalysisData['seeds'], round: number) {
         category: 'media_mention',
         dataClasses: ['full_name'],
         match: 'possible_homonym',
+      },
+    },
+    {
+      ...base,
+      id: 'W5',
+      seedId: profile.id,
+      url: 'https://registro-publico.invalid/busca-por-nome',
+      title: 'Agregador de diário oficial — fonte fictícia',
+      excerpt:
+        'Conteúdo sintético: o nome aparece em uma publicação de diário oficial; número, partes e assunto omitidos.',
+      exposure: {
+        category: 'public_record',
+        dataClasses: ['full_name', 'legal_mention'],
+        match: 'declared_identity',
       },
     },
   ];
