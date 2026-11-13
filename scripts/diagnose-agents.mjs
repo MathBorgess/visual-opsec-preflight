@@ -62,7 +62,41 @@ const probes = [
     },
   },
 ];
-for (const probe of probes) {
+async function cleanup(id) {
+  for (let attempt = 0; attempt < 6; attempt++) {
+    try {
+      const state = await client.beta.agents.sessions.retrieve(id);
+      if (['in_progress', 'requires_action'].includes(state.status)) {
+        await client.beta.agents.sessions.events.create(id, {
+          events: [{ type: 'agent.session.input.cancel' }],
+        });
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+      const deleted = await client.beta.agents.sessions.delete(id);
+      if (deleted.deleted) {
+        log({ stage: 'cleanup', sessionId: id, confirmed: true });
+        return true;
+      }
+    } catch (error) {
+      if (error.status === 404) {
+        log({ stage: 'cleanup', sessionId: id, confirmed: true });
+        return true;
+      }
+      log({ stage: 'cleanup_pending', sessionId: id, status: error.status, code: error.code });
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+  log({ stage: 'cleanup_failed', sessionId: id });
+  return false;
+}
+for (const id of (process.env.OPSEC_PROBE_CLEANUP_IDS ?? '').split(',').filter(Boolean)) {
+  if (!/^sess_[a-z0-9]+$/.test(id)) throw Error('Invalid synthetic cleanup ID.');
+  if (!(await cleanup(id))) throw Error('Previous synthetic cleanup unconfirmed.');
+}
+const firstProbe = Number(process.env.OPSEC_PROBE_START_AT ?? 0);
+if (!Number.isInteger(firstProbe) || firstProbe < 0 || firstProbe > 2)
+  throw Error('Invalid probe selection.');
+for (const probe of probes.slice(firstProbe)) {
   let id;
   try {
     const result = await client.beta.agents.sessions
@@ -92,25 +126,8 @@ for (const probe of probes) {
       reason: reason(error),
     });
     process.exitCode = 1;
-    break;
   } finally {
-    if (id) {
-      try {
-        await client.beta.agents.sessions.events.create(id, {
-          events: [{ type: 'agent.session.input.cancel' }],
-        });
-      } catch {
-        /* deletion still attempted */
-      }
-      try {
-        const deleted = await client.beta.agents.sessions.delete(id);
-        log({ stage: 'cleanup', sessionId: id, confirmed: deleted.deleted });
-        if (!deleted.deleted) process.exitCode = 1;
-      } catch (error) {
-        log({ stage: 'cleanup_failed', sessionId: id, status: error.status, code: error.code });
-        process.exitCode = 1;
-      }
-    }
+    if (id && !(await cleanup(id))) process.exitCode = 1;
   }
   if (process.exitCode) break;
 }
