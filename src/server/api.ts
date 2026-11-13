@@ -23,6 +23,7 @@ import {
   safeUrl,
   presentEvidence,
   publicResearchPurpose,
+  curateVerifiedResearch,
 } from '@/lib/policy';
 import { buildReport } from '@/lib/report';
 import { processImage } from './image';
@@ -725,12 +726,41 @@ async function load(p: AgentsProvider, m: Manifest): Promise<Loaded> {
           roundsRemaining: LIMITS.rounds - m.rounds,
         });
       } else {
-        failure = issue;
-        logFailure(failure);
-        error =
-          'A pesquisa não pôde ser validada/recuperada. Os resultados visuais permanecem disponíveis.';
-        m.phase = 'partial';
-        m.stopReason = 'provider_failure';
+        const curated =
+          !failure && issue.code === 'UNVERIFIED_SOURCE' && safeSources
+            ? curateVerifiedResearch(
+                candidate.data,
+                analysis,
+                m.allowedSeedIds,
+                m.allowedDomains,
+                m.provider,
+                search!.visitedUrls,
+              )
+            : null;
+        if (curated) {
+          research = curated;
+          verificationIssue = new AppError(
+            issue.code,
+            'Citações sem comprovação foram descartadas; fontes verificadas preservadas.',
+            issue.status,
+            { ...issue.details, retryable: false },
+          );
+          if (m.stage === 'research' && ['researching', 'uncertain'].includes(m.phase))
+            m.phase = 'research_ready';
+          diagnosticEvent('research_sources_curated', {
+            retained: curated.sources.length,
+            discarded: candidate?.success
+              ? candidate.data.sources.length - curated.sources.length
+              : 0,
+          });
+        } else {
+          failure = issue;
+          logFailure(failure);
+          error =
+            'A pesquisa não pôde ser validada/recuperada. Os resultados visuais permanecem disponíveis.';
+          m.phase = 'partial';
+          m.stopReason = 'provider_failure';
+        }
       }
     }
   }

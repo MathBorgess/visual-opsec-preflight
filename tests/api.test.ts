@@ -827,6 +827,63 @@ describe('API do caso — jornada e fronteiras', () => {
       if (turnStatus !== 'in_progress') expect(result.data.report.research.sources).toHaveLength(1);
     },
   );
+  it('após duas rodadas preserva apenas fontes verificadas e conclui sem achados dependentes de citação descartada', async () => {
+    const demo = new DemoProvider();
+    const p: AgentsProvider & { calls: ProviderRequest[] } = {
+      mode: 'openai',
+      model: 'fixture-model',
+      calls: demo.calls,
+      start: (r) => demo.start(r),
+      cancel: (id) => demo.cancel(id),
+      delete: (id) => demo.delete(id),
+      read: async (id) => {
+        const s = structuredClone(await demo.read(id));
+        if (s.initial.kind === 'research') {
+          for (const o of s.outputs) {
+            if (!o || typeof o !== 'object' || !('sources' in o)) continue;
+            const research = o as {
+              sources: Record<string, unknown>[];
+              findings: Record<string, unknown>[];
+            };
+            research.sources[0].url = 'https://example.org/verified';
+            research.sources[0].retrievalState = 'retrieved';
+            research.sources.push({
+              ...research.sources[0],
+              id: 'W2',
+              url: 'https://example.org/unverified',
+            });
+            research.findings.push({
+              ...research.findings[0],
+              id: 'FW2',
+              evidenceIds: ['V1', 'W2'],
+              statement: 'UNVERIFIED_CLAIM',
+            });
+          }
+          s.visitedUrls = ['https://example.org/verified'];
+        }
+        return s;
+      },
+    };
+    const h = await toReview(harness(p));
+    await h.call('advance', { action: 'search', seedIds: ['S1'] });
+    expect((await h.call('get')).data.verificationPending).toBe(true);
+    await h.call('advance', { action: 'research_more' });
+    const ready = await h.call('get');
+    expect(ready.data.phase).toBe('research_ready');
+    expect(ready.data.verificationPending).toBe(false);
+    expect(ready.data.research.sources.map((s: { id: string }) => s.id)).toEqual(['W1']);
+    expect(ready.data.research.findings.map((f: { id: string }) => f.id)).toEqual(['FW1']);
+    expect(ready.data.research.limitations.join(' ')).toContain('cobertura parcial');
+    await h.call('advance', { action: 'synthesize' });
+    for (let i = 0; i < 2; i++) {
+      const done = await h.call('get');
+      expect(done.data.phase).toBe('completed');
+      expect(done.data.report.research.sources).toHaveLength(1);
+      expect(JSON.stringify(done.data.report)).not.toContain('UNVERIFIED_CLAIM');
+      expect(JSON.stringify(done.data.report)).not.toContain('https://example.org/unverified');
+    }
+    expect(p.calls.filter((r) => r.stage === 'research')).toHaveLength(2);
+  });
   it('resposta visual malformada mantém inventário e encerra com documento parcial', async () => {
     class Malformed extends DemoProvider {
       async read(id: string) {

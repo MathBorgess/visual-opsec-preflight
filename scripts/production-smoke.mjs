@@ -4,6 +4,12 @@ import { randomUUID } from 'node:crypto';
 // One synthetic case per explicit invocation. Never reads or exports API keys.
 const origin = 'https://visual-opsec-preflight.vercel.app';
 const expected = process.env.EXPECTED_REVISION;
+// Default matches the UI: public web, limited by the approved seeds.
+// Set this only to exercise an additional operator-selected domain boundary.
+const domains = (process.env.OPSEC_SMOKE_DOMAINS ?? '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
 let cookie = '';
 let created = false;
 let webVerified = false;
@@ -91,7 +97,7 @@ try {
         .map((s) => s.id)
         .slice(0, 1);
       await request('/api/case/advance', {
-        body: { action: 'search', seedIds: seeds, domains: seeds.length ? ['mozilla.org'] : [] },
+        body: { action: 'search', seedIds: seeds, domains: seeds.length ? domains : [] },
       });
     } else if (view.phase === 'research_ready') {
       if (view.verificationPending && view.budget.rounds < 2) {
